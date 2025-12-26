@@ -4670,10 +4670,51 @@ body {
   flex-direction: column;
 }
 
+@media (max-width: 639px) {
+  .app-dialog-content {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    transform: none;
+    border-top-left-radius: 1rem;
+    border-top-right-radius: 1rem;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}
+
+@media (min-width: 640px) {
+  .app-dialog-content {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: auto;
+    max-width: var(--container-lg);
+    transform: translate(-50%, -50%);
+    border-radius: 0.5rem;
+  }
+}
+
 .app-dialog-scroll {
   min-height: 0;
   overflow-y: auto;
   max-height: 100%;
+}
+
+.app-overlay-backdrop {
+  z-index: 1000;
+}
+
+.app-overlay-surface {
+  z-index: 1001;
+}
+
+.app-overlay-content {
+  z-index: 1102;
 }
 
 /* Popovers (calendar/date pickers) must always be above dialogs */

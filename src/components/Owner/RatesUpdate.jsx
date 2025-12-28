@@ -49,16 +49,14 @@ import {
 import { toast } from "sonner";
 import { formatINR } from "../../utils/currencyFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
-
-const API =
-  process.env.REACT_APP_API_URL ||
-  "https://gd-10-0-backend-1.onrender.com";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 /**
  * RatesUpdate component
  * - Manage global material rates and vendor-specific rates
  */
 export default function RatesUpdate() {
+  const API = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   // data
   const [materials, setMaterials] = useState([]); // global scrap_types

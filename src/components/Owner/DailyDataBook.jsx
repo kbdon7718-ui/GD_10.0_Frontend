@@ -41,6 +41,7 @@ import {
 import { formatDate, getTodayISO } from "../../utils/dateFormat";
 import { toast } from "sonner";
 import { useMediaQuery } from "../../utils/useMediaQuery";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 export function DailyDataBook() {
   const isDesktop = useMediaQuery("(min-width: 768px)");
@@ -57,7 +58,7 @@ export function DailyDataBook() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
 
-  const API_URL = "https://gd-10-0-backend-1.onrender.com";
+  const API_URL = getApiBaseUrl();
   const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
   const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
@@ -162,6 +163,56 @@ export function DailyDataBook() {
 
   const totalExpense = Number(summary?.total_amount || 0);
 
+  /* ================= EXPORT ================= */
+  const handleExport = () => {
+    if (!expenses.length) {
+      toast.error("No data to export");
+      return;
+    }
+    // Prepare CSV header
+    const header = [
+      "Category",
+      "Description",
+      "Paid To",
+      "Mode",
+      "Amount",
+      "Entered By",
+      "Date"
+    ];
+    // Prepare CSV rows
+    const rows = expenses.map((e) => [
+      e.category,
+      e.description,
+      e.paid_to,
+      e.payment_mode,
+      e.amount,
+      e.created_by_name || "Manager",
+      e.date ? formatDate(e.date) : ""
+    ]);
+    // Combine header and rows
+    const csvContent = [header, ...rows]
+      .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\r\n");
+    // Create blob and trigger download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `expenses_${filterDate}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("Exported as CSV");
+  };
+
+  // Refresh button handler
+  const handleRefresh = () => {
+    fetchExpenses();
+    fetchSummary();
+    toast.success("Data refreshed");
+  };
+
   /* ================= UI ================= */
 
   return (
@@ -195,12 +246,12 @@ export function DailyDataBook() {
             </PopoverContent>
           </Popover>
 
-          <Button onClick={fetchExpenses} variant="outline" size="sm">
+          <Button onClick={handleRefresh} variant="outline" size="sm">
             <RefreshCcw className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
 
-          <Button className="bg-green-600" size="sm">
+          <Button className="bg-green-600" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">Export</span>
           </Button>

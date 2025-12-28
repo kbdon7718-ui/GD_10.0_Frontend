@@ -19,12 +19,13 @@ import { Download } from "lucide-react";
 import { formatDate } from "../../utils/dateFormat";
 import { toast } from "sonner";
 import { useMediaQuery } from "../../utils/useMediaQuery";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
-const API_URL = process.env.REACT_APP_API_URL;
 const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
 export function BankAccount() {
+  const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);

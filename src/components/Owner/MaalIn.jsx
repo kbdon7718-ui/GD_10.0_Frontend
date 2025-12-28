@@ -24,10 +24,10 @@ import { Calendar, RefreshCcw } from "lucide-react";
 import { formatDate } from "../../utils/dateFormat";
 import { toast } from "sonner";
 import { useMediaQuery } from "../../utils/useMediaQuery";
-
-const API_URL = "https://gd-10-0-backend-1.onrender.com";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 export default function MaalIn() {
+  const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const [maalIn, setMaalIn] = useState([]);
   const [summary, setSummary] = useState({

@@ -15,8 +15,8 @@ import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { toast } from "sonner";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
-const API_URL = "https://gd-10-0-backend-1.onrender.com";
 const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
@@ -30,6 +30,7 @@ const askConfirm = (message) =>
   });
 
 export function MillSection() {
+  const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const [sales, setSales] = useState([]);
   const [payments, setPayments] = useState([]);

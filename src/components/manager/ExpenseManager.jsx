@@ -1,5 +1,4 @@
-
-       import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -29,6 +28,7 @@ import { toast } from "sonner";
 import { Plus, Save, X } from "lucide-react";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 const EXPENSE_CATEGORIES = [
   "Miscellaneous",
@@ -64,7 +64,7 @@ export function ExpenseManager() {
 
   const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
   const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
-  const API = process.env.REACT_APP_API_URL;
+  const API = getApiBaseUrl();
 
   /* ================= LABOURS ================= */
   useEffect(() => {
@@ -163,10 +163,26 @@ export function ExpenseManager() {
       };
 
       // LABOUR
+      let withdrawalRes = null;
       if (formData.category === "Labour") {
         payload.labour_id = formData.labour_id;
         payload.paid_to =
           labours.find((l) => l.id === formData.labour_id)?.name || "";
+
+        // Also record as withdrawal for labour history
+        withdrawalRes = await fetch(`${API}/api/labour/withdraw`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            company_id: COMPANY_ID,
+            godown_id: GODOWN_ID,
+            labour_id: formData.labour_id,
+            date: formData.date,
+            amount: Number(formData.amount),
+            mode: formData.transactionMode,
+          }),
+        });
+        // Optionally check withdrawalRes.ok and show error if needed
       }
 
       // FERIWALA

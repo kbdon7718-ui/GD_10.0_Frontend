@@ -11,14 +11,13 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { Plus, Trash2, Save } from "lucide-react";
-
-const API_URL =
-  process.env.REACT_APP_API_URL || "https://gd-10-0-backend-1.onrender.com";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
 export default function MaalInManager() {
+  const API_URL = getApiBaseUrl();
   const today = new Date().toISOString().split("T")[0];
 
   /* =========================

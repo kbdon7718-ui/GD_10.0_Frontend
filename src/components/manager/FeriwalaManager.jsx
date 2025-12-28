@@ -11,11 +11,11 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { Plus, Trash2, Save, X, IndianRupee } from "lucide-react";
-
-const API_URL = process.env.REACT_APP_API_URL || "https://gd-10-0-backend-1.onrender.com";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 
 export function FeriwalaManager() {
+  const API_URL = getApiBaseUrl();
   const [isAdding, setIsAdding] = useState(false);
 
   const [vendors, setVendors] = useState([]);

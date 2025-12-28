@@ -18,11 +18,11 @@ import { toast } from "sonner";
 import { Calendar } from "lucide-react";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
-
-const API_URL = process.env.REACT_APP_API_URL || "https://gd-10-0-backend-1.onrender.com";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 
 export function LabourManager() {
+  const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const company_id = "2f762c5e-5274-4a65-aa66-15a7642a1608";
   const godown_id = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";

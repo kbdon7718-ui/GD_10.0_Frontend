@@ -21,11 +21,11 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Save, X } from "lucide-react";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
-
-const API_URL = process.env.REACT_APP_API_URL || "https://gd-10-0-backend-1.onrender.com";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 
 export function TruckDriverManager() {
+  const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const [truckRecords, setTruckRecords] = useState([]);
   const [isAdding, setIsAdding] = useState(false);

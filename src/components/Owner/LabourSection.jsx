@@ -45,9 +45,10 @@ import { toast } from "sonner";
 import { OwnerReadOnlyBadge } from "./OwnerBadge";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { ResizableHistoryModal } from "./ResizableHistoryModal";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 export function LabourSection() {
-  const API_URL = "https://gd-10-0-backend-1.onrender.com";
+  const API_URL = getApiBaseUrl();
   const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
   const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
@@ -800,7 +801,15 @@ export function LabourSection() {
             </div>
 
             {ledgerEntries.length === 0 ? (
-              <p className="text-center py-8 text-gray-500">No transactions</p>
+              <div className="text-center py-12">
+                <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                  <FileSpreadsheet className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Transaction History</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                  No salary payments, withdrawals, or expenses found for this worker. History will appear here once transactions are recorded.
+                </p>
+              </div>
             ) : isDesktop ? (
               <div className="overflow-x-auto">
                 <Table>
@@ -811,6 +820,7 @@ export function LabourSection() {
                       <TableHead>Mode</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
+                      <TableHead>Remarks</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -856,6 +866,10 @@ export function LabourSection() {
           <TableCell className="text-right font-semibold">
             {formatINR(running)}
           </TableCell>
+
+          <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+            {e.remarks || (e.entry_type === "Expense" ? e.description : "—")}
+          </TableCell>
         </TableRow>
       );
     });
@@ -874,18 +888,35 @@ export function LabourSection() {
                     running += isSalary ? amt : -amt;
                     return (
                       <Card key={idx}>
-                        <CardContent className="p-4 space-y-2">
+                        <CardContent className="p-4 space-y-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="font-medium text-gray-900 dark:text-white">{e.entry_type}</p>
-                              <p className="text-xs text-gray-500">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  e.entry_type === 'Salary' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                  e.entry_type === 'Payment' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                                  'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                                }`}>
+                                  {e.entry_type}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {e.mode || "—"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
                                 {e.date ? new Date(e.date).toLocaleDateString() : "—"}
-                                {e.mode ? ` — ${e.mode}` : ""}
                               </p>
+                              {(e.remarks || (e.entry_type === "Expense" && e.description)) && (
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                  {e.remarks || e.description}
+                                </p>
+                              )}
                             </div>
                             <div className="text-right shrink-0">
-                              <p className={`text-sm font-semibold ${isSalary ? "text-green-700" : "text-red-700"}`}>
-                                {formatINR(amt)}
+                              <p className={`text-sm font-semibold ${
+                                e.entry_type === 'Salary' ? 'text-green-700' : 'text-red-700'
+                              }`}>
+                                {e.entry_type === 'Salary' ? '+' : '-'}{formatINR(amt)}
                               </p>
                               <p className="text-xs text-gray-500">Bal: {formatINR(running)}</p>
                             </div>

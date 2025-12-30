@@ -21,6 +21,7 @@ import { useAuth } from "../../utils/authContext";
 
 /* SECTIONS */
 import DashboardOverview from "./DashboardOverview";
+// import OwnerDashboard from "./OwnerDashboard";
 import { DailyDataBook } from "./DailyDataBook";
 import { RokadiUpdate } from "./RokadiUpdate";
 import MaalIn from "./MaalIn";
@@ -58,6 +59,8 @@ export function OwnersDashboard() {
   return (
     <div className="min-h-[100dvh] bg-gray-50 flex flex-col overflow-x-hidden">
       {/* ================= HEADER ================= */}
+
+      {/* ========== OWNER DAILY SUMMARY DASHBOARD REMOVED ========== */}
       <div className="sticky top-0 z-40 bg-white px-4 py-4 flex justify-between items-center shadow-sm">
           <div>
             <h1 className="text-xl font-bold tracking-wide text-emerald-600">

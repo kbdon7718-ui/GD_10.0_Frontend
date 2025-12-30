@@ -21,7 +21,7 @@ const CASH_OUT_CATEGORIES = [
 
 export function RokadiManager() {
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const { rokadiTransactions, addRokadiTransaction, updateRokadiTransaction, deleteRokadiTransaction } = useData();
+  const { rokadiTransactions, addRokadiTransaction, updateRokadiTransaction, deleteRokadiTransaction, rokadiAccounts } = useData();
   
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -29,6 +29,7 @@ export function RokadiManager() {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     transactionType: 'Cash In',
+    paymentMode: 'cash',
     category: 'Sales Revenue',
     description: '',
     amount: 0,
@@ -38,6 +39,7 @@ export function RokadiManager() {
     setFormData({
       date: new Date().toISOString().split('T')[0],
       transactionType: 'Cash In',
+      paymentMode: 'cash',
       category: 'Sales Revenue',
       description: '',
       amount: 0,
@@ -71,11 +73,22 @@ export function RokadiManager() {
       ? currentBalance + formData.amount 
       : currentBalance - formData.amount;
     
+    // Determine account mapping: for debits, cash payments use cash account, upi/bank use bank account
+    let account_id = formData.account_id || null;
+    if (formData.transactionType === 'Cash Out') {
+      if (formData.paymentMode === 'cash') {
+        account_id = rokadiAccounts.find(a => a.account_type === 'cash')?.id || account_id;
+      } else {
+        // upi or bank -> use bank account
+        account_id = rokadiAccounts.find(a => a.account_type === 'bank')?.id || account_id;
+      }
+    }
+
     if (editingId) {
-      updateRokadiTransaction(editingId, { ...formData, balanceAfterTransaction });
+      updateRokadiTransaction(editingId, { ...formData, account_id, balanceAfterTransaction });
       toast.success('Rokadi transaction updated!');
     } else {
-      addRokadiTransaction({ ...formData, balanceAfterTransaction });
+      addRokadiTransaction({ ...formData, account_id, balanceAfterTransaction });
       toast.success('Rokadi transaction added!');
     }
     
@@ -86,6 +99,7 @@ export function RokadiManager() {
     setFormData({
       date: transaction.date,
       transactionType: transaction.transactionType,
+      paymentMode: transaction.paymentMode || 'cash',
       category: transaction.category,
       description: transaction.description,
       amount: transaction.amount,
@@ -208,6 +222,23 @@ export function RokadiManager() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="paymentMode">Payment Mode</Label>
+                  <Select
+                    value={formData.paymentMode}
+                    onValueChange={(value) => setFormData({ ...formData, paymentMode: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="upi">UPI</SelectItem>
+                      <SelectItem value="bank">Bank</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
                   <Select 
                     value={formData.category} 
@@ -268,6 +299,7 @@ export function RokadiManager() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
+                      <TableHead>Payment</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Amount</TableHead>
@@ -295,6 +327,7 @@ export function RokadiManager() {
                             {transaction.transactionType}
                           </span>
                         </TableCell>
+                        <TableCell>{transaction.paymentMode || (transaction.account_id && transaction.account_id.includes('bank') ? 'bank' : 'cash')}</TableCell>
                         <TableCell>{transaction.category}</TableCell>
                         <TableCell>{transaction.description}</TableCell>
                         <TableCell className={transaction.transactionType === 'Cash In' ? 'text-green-600' : 'text-red-600'}>
@@ -350,6 +383,8 @@ export function RokadiManager() {
                         <div className="space-y-1">
                           <p className="text-xs text-gray-500 dark:text-gray-400">Description</p>
                           <p className="text-sm text-gray-900 dark:text-white break-words">{transaction.description || '—'}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Payment</p>
+                          <p className="text-sm text-gray-900 dark:text-white">{transaction.paymentMode || (transaction.account_id && transaction.account_id.includes('bank') ? 'bank' : 'cash')}</p>
                         </div>
 
                         <div className="flex items-center justify-between">

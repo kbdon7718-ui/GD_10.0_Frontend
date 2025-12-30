@@ -427,18 +427,22 @@ const exportToCSV = (rows, filename) => {
 
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {cashAccounts.map(a => (
-              <Card key={a.id}>
-                <CardHeader>
-                  <CardTitle className="text-sm">{a.account_name}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold">
-                    {formatINR(a.balance)}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {cashAccounts.map(a => {
+              const amount = Number(a.balance);
+              const amountColor = amount >= 0 ? "text-green-700" : "text-red-600";
+              return (
+                <Card key={a.id}>
+                  <CardHeader>
+                    <CardTitle className="text-sm">{a.account_name}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className={`text-2xl font-semibold ${amountColor}`}>
+                      {formatINR(amount)}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -538,22 +542,26 @@ const exportToCSV = (rows, filename) => {
           {bankAccounts.length === 0 ? (
             <p className="text-gray-500">No bank accounts</p>
           ) : (
-            bankAccounts.map(b => (
-              <div
-                key={b.id}
-                className="flex items-center justify-between border-b py-2"
-              >
-                <div>
-                  <p className="font-medium">{b.account_name}</p>
-                  <p className="text-sm text-gray-500">
-                    {b.account_number || "—"}
-                  </p>
+            bankAccounts.map(b => {
+              const amount = Number(b.balance);
+              const amountColor = amount >= 0 ? "text-green-700" : "text-red-600";
+              return (
+                <div
+                  key={b.id}
+                  className="flex items-center justify-between border-b py-2"
+                >
+                  <div>
+                    <p className="font-medium">{b.account_name}</p>
+                    <p className="text-sm text-gray-500">
+                      {b.account_number || "—"}
+                    </p>
+                  </div>
+                  <div className={`text-xl font-semibold ${amountColor}`}>
+                    {formatINR(amount)}
+                  </div>
                 </div>
-                <div className="text-xl font-semibold text-purple-600">
-                  {formatINR(b.balance)}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </CardContent>
       </Card>

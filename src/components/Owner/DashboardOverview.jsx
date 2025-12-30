@@ -1,3 +1,4 @@
+// ================= IMPORTS AT TOP =================
 import { useEffect, useState } from "react";
 import {
   Card,
@@ -5,6 +6,21 @@ import {
   CardHeader,
   CardTitle,
 } from "../ui/card";
+import OwnerDailySummary from "./OwnerDailySummary";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import {
@@ -68,6 +84,51 @@ export default function DashboardOverview() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [apiBase, setApiBase] = useState(getApiBaseUrl);
   const [apiDraft, setApiDraft] = useState(getApiBaseUrl);
+  // New state for time filter
+  const [timeFilter, setTimeFilter] = useState('today');
+
+  // KPI and chart data variables
+  let profit = 0, cash = 0, expense = 0, bank = 0, truck = 0, labour = 0, feriwala = 0, kabadiwala = 0;
+  let maalBarData = [], scrapFlowData = [], expensePieData = [], expensePieColors = ['#f87171','#fbbf24','#34d399','#60a5fa','#a78bfa','#f472b6','#facc15'], expenseTableData = [];
+  let activityTableData = [], scrapCategoryData = [], scrapCategoryColors = ['#4ade80','#60a5fa','#fbbf24','#f472b6','#a78bfa'];
+  if (data) {
+    const analytics = data.analytics || data;
+    const tf = timeFilter === 'today' ? 'today' : timeFilter === 'month' ? 'month' : 'all_time';
+    // Profit: sales - purchase - expenses
+    const sales = Number(analytics?.sales?.[tf] ?? 0);
+    const purchase = Number(analytics?.purchase?.[tf] ?? 0);
+    expense = Number(analytics?.expenses?.[tf] ?? 0);
+    profit = sales - purchase - expense;
+    // Cash/Bank
+    cash = Number(analytics?.cash?.rokadi ?? 0);
+    bank = Number(analytics?.cash?.bank ?? 0);
+    // Maal In/Out bar chart
+    maalBarData = [
+      { name: 'Purchase', value: purchase },
+      { name: 'Sales', value: sales },
+      { name: 'Expenses', value: expense },
+      { name: 'Profit', value: profit },
+    ];
+    // Scrap flow line chart (trend)
+    scrapFlowData = (analytics?.scrap_flow ?? []).map(d => ({ date: d.date, scrapIn: d.in, scrapOut: d.out }));
+    // Expense pie chart
+    expensePieData = (analytics?.expense_pie ?? []).map(e => ({ category: e.category, value: e.value }));
+    // Expense table
+    expenseTableData = (analytics?.expense_summary ?? []).map(e => ({ category: e.category, payments: e.payments, total: Number(e.total) }));
+    // Activity summary
+    truck = Number(analytics?.truck?.[tf] ?? 0);
+    labour = Number(analytics?.labour?.[tf] ?? 0);
+    feriwala = Number(analytics?.feriwala?.[tf] ?? 0);
+    kabadiwala = Number(analytics?.kabadiwala?.[tf] ?? 0);
+    activityTableData = [
+      { activity: 'Truck', today: analytics?.truck?.today ?? 0, month: analytics?.truck?.month ?? 0, all: analytics?.truck?.all_time ?? 0 },
+      { activity: 'Labour', today: analytics?.labour?.today ?? 0, month: analytics?.labour?.month ?? 0, all: analytics?.labour?.all_time ?? 0 },
+      { activity: 'Feriwala', today: analytics?.feriwala?.today ?? 0, month: analytics?.feriwala?.month ?? 0, all: analytics?.feriwala?.all_time ?? 0 },
+      { activity: 'Kabadiwala', today: analytics?.kabadiwala?.today ?? 0, month: analytics?.kabadiwala?.month ?? 0, all: analytics?.kabadiwala?.all_time ?? 0 },
+    ];
+    // Scrap category pie
+    scrapCategoryData = (analytics?.scrap_by_material ?? []).map(m => ({ category: m.material, value: m.weight }));
+  }
 
   const companyId =
     (typeof window !== "undefined" &&
@@ -227,6 +288,69 @@ export default function DashboardOverview() {
       {/* ================= DASHBOARD ================= */}
       {!loading && !error && data && (
         <>
+          {/* ========== TIME FILTER ========== */}
+          <div className="mb-4 flex gap-2">
+            {['today', 'month', 'all'].map((period) => (
+              <button
+                key={period}
+                className={`px-3 py-1 rounded-full border text-xs font-semibold ${timeFilter === period ? 'bg-emerald-600 text-white' : 'bg-white text-gray-700'}`}
+                onClick={() => setTimeFilter(period)}
+              >
+                {period === 'today' ? 'Today' : period === 'month' ? 'This Month' : 'All Time'}
+              </button>
+            ))}
+          </div>
+
+          {/* ========== KPI CARDS ========== */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            {/* Profit KPI */}
+            <Card className="text-center">
+              <CardHeader>
+                <CardTitle>Profit</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-3xl font-bold ${profit > 0 ? 'text-green-600' : profit < 0 ? 'text-red-600' : 'text-gray-500'}`}>₹{profit.toLocaleString()}</div>
+                <div className="text-xs mt-1">{profit > 0 ? 'Profit' : profit < 0 ? 'Loss' : 'Neutral'}</div>
+              </CardContent>
+            </Card>
+            {/* Cash KPI */}
+            <Card className="text-center">
+              <CardHeader>
+                <CardTitle>Cash</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">₹{cash.toLocaleString()}</div>
+                <div className="text-xs mt-1">{timeFilter === 'today' ? 'Today' : timeFilter === 'month' ? 'This Month' : 'All Time'}</div>
+              </CardContent>
+            </Card>
+            {/* Expense KPI */}
+            <Card className="text-center">
+              <CardHeader>
+                <CardTitle>Expense</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-red-600">₹{expense.toLocaleString()}</div>
+                <div className="text-xs mt-1">{timeFilter === 'today' ? 'Today' : timeFilter === 'month' ? 'This Month' : 'All Time'}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ========== MAAL IN VS OUT BAR CHART ========== */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Maal In vs Out (Bar Chart)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={maalBarData}>
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#8884d8" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-gray-500">
               {lastUpdated ? `Last updated: ${lastUpdated.toLocaleString()}` : ""}

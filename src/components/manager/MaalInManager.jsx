@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import {
   Card,
   CardHeader,
@@ -17,6 +18,7 @@ const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
 export default function MaalInManager() {
+  const navigate = useNavigate();
   const API_URL = getApiBaseUrl();
   const today = new Date().toISOString().split("T")[0];
 
@@ -83,6 +85,13 @@ export default function MaalInManager() {
       scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
     });
     loadVendorsByType(type);
+
+    // Redirect for Feriwala/Kabadiwala
+    if (type === "feriwala") {
+      navigate("/manager/feriwala/add");
+    } else if (type === "kabadiwala") {
+      navigate("/manager/kabadiwala/add");
+    }
   };
 
   const onVendorChange = (vendor_id) => {
@@ -190,6 +199,11 @@ export default function MaalInManager() {
         UI
   ========================= */
 
+  // Only show Maal In form for Local/Factory
+  if (vendorType === "feriwala" || vendorType === "kabadiwala") {
+    return null;
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -216,25 +230,6 @@ export default function MaalInManager() {
               <option value="factory">Factory</option>
             </select>
           </div>
-
-          {/* VENDOR */}
-          {(vendorType === "feriwala" || vendorType === "kabadiwala") && (
-            <div>
-              <Label>Vendor *</Label>
-              <select
-                className="border p-2 rounded w-full"
-                value={form.vendor_id}
-                onChange={(e) => onVendorChange(e.target.value)}
-              >
-                <option value="">-- select vendor --</option>
-                {vendors.map((v) => (
-                  <option key={v.vendor_id} value={v.vendor_id}>
-                    {v.vendor_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           {/* DATE */}
           <div>
@@ -277,7 +272,14 @@ export default function MaalInManager() {
                 }
               />
 
-              <Input type="number" value={row.rate} readOnly />
+              {/* Manual rate entry for Local/Factory */}
+              <Input
+                type="number"
+                placeholder="Rate"
+                value={row.rate}
+                onChange={(e) => onScrapChange(i, "rate", e.target.value)}
+                readOnly={false}
+              />
 
               <Input type="number" value={row.amount} readOnly />
 

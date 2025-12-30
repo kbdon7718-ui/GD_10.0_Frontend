@@ -321,10 +321,30 @@ export default function RatesUpdate() {
     setSetVendorRateOpen(true);
   };
 
-  // small UI helpers
+  // Track previous rates for change calculation
+  const previousRatesRef = React.useRef({});
+
+  // After each fetch, update previousRatesRef
+  useEffect(() => {
+    if (materials && materials.length > 0) {
+      const prev = previousRatesRef.current;
+      materials.forEach((m) => {
+        if (m && m.id) {
+          prev[m.id] = prev[m.id] ?? m.global_rate;
+        }
+      });
+      previousRatesRef.current = { ...prev };
+    }
+  }, [materials]);
+
+  // Compute rate change for each material
   const getRateChange = (mat) => {
-    // TODO: compute difference vs previous / demo
-    return 0;
+    if (!mat || !mat.id) return 0;
+    const prev = previousRatesRef.current[mat.id];
+    if (prev == null) return 0;
+    const change = Number(mat.global_rate) - Number(prev);
+    // If no change, show 0
+    return change !== 0 ? change.toFixed(2) : "0";
   };
 
   return (
@@ -511,13 +531,17 @@ export default function RatesUpdate() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">
-                            {getRateChange(m) >= 0 ? (
-                              <span className="inline-flex items-center gap-1">
+                            {getRateChange(m) > 0 ? (
+                              <span className="inline-flex items-center gap-1 text-green-600">
                                 <TrendingUp className="h-3 w-3" /> ₹{getRateChange(m)}/kg
+                              </span>
+                            ) : getRateChange(m) < 0 ? (
+                              <span className="inline-flex items-center gap-1 text-red-600">
+                                <TrendingDown className="h-3 w-3" /> ₹{getRateChange(m)}/kg
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1">
-                                <TrendingDown className="h-3 w-3" /> ₹{getRateChange(m)}/kg
+                                ₹0/kg
                               </span>
                             )}
                           </Badge>
@@ -574,13 +598,17 @@ export default function RatesUpdate() {
 
                       <div className="flex items-center justify-between">
                         <Badge variant="outline" className="max-w-full">
-                          {getRateChange(m) >= 0 ? (
-                            <span className="inline-flex items-center gap-1">
+                          {getRateChange(m) > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-green-600">
                               <TrendingUp className="h-3 w-3" /> ₹{getRateChange(m)}/kg
+                            </span>
+                          ) : getRateChange(m) < 0 ? (
+                            <span className="inline-flex items-center gap-1 text-red-600">
+                              <TrendingDown className="h-3 w-3" /> ₹{getRateChange(m)}/kg
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1">
-                              <TrendingDown className="h-3 w-3" /> ₹{getRateChange(m)}/kg
+                              ₹0/kg
                             </span>
                           )}
                         </Badge>

@@ -22,11 +22,28 @@ export function DataProvider({ children }) {
   const [partnerWithdrawals, setPartnerWithdrawals] = useState([]);
   const [parties, setParties] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
+  // Keep a single cash account and a single bank account for Rokadi
+  // Only single cash and single bank account for Rokadi
   const [rokadiAccounts, setRokadiAccounts] = useState([
-    { id: '1', accountName: 'Cash Account 1', balance: 145230 },
-    { id: '2', accountName: 'Cash Account 2', balance: 89500 },
-    { id: '3', accountName: 'Cash Account 3', balance: 125000 },
+    { id: 'rokadi_cash', accountName: 'Cash Account', balance: 145230, account_type: 'cash' },
+    { id: 'rokadi_bank', accountName: 'Bank Account', balance: 250000, account_type: 'bank' },
   ]);
+
+  // On mount, migrate all transactions from any old cash account (e.g., '1', 'Cash Account 1') to 'rokadi_cash', and remove old cash accounts
+  useEffect(() => {
+    setRokadiAccounts(prev => prev.filter(acc => acc.id === 'rokadi_cash' || acc.id === 'rokadi_bank'));
+    setRokadiTransactions(prev => prev.map(txn => {
+      // Migrate old cash account transactions
+      if (txn.account_id === '1' || txn.account_id === 'Cash Account 1') {
+        return { ...txn, account_id: 'rokadi_cash' };
+      }
+      // Migrate old bank account transactions (e.g., HDFC)
+      if (txn.account_id === 'hdfc' || txn.account_id === 'HDFC' || txn.account_id === 'Bank Account HDFC') {
+        return { ...txn, account_id: 'rokadi_bank' };
+      }
+      return txn;
+    }));
+  }, []);
   const [materialRates, setMaterialRates] = useState([
     { id: '1', materialType: 'Iron', baseRate: 40, lastUpdated: new Date().toISOString() },
     { id: '2', materialType: 'Plastic', baseRate: 25, lastUpdated: new Date().toISOString() },

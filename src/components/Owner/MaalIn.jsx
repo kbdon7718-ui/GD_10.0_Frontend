@@ -34,6 +34,8 @@ export default function MaalIn() {
     totalWeight: 0,
     totalAmount: 0,
   });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchScope, setSearchScope] = useState("all");
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filterDate, setFilterDate] = useState(
@@ -48,27 +50,22 @@ export default function MaalIn() {
   ====================================================== */
   const fetchMaalIn = async () => {
     try {
+      // 1) Maal In (local + any header-based entries)
       const res = await fetch(
         `${API_URL}/api/maalin/list?company_id=${company_id}&godown_id=${godown_id}&date=${filterDate}`
       );
-
       const data = await res.json();
-
       if (!data.success) {
         toast.error("Failed to fetch Maal In");
         return;
       }
 
-      const entries = data.maal_in;
-
-      // Convert header-only response into detailed item rows
       let allItemRows = [];
 
-      for (let entry of entries) {
-        // Fetch items for each Maal In
+      // expand maal_in headers
+      for (let entry of data.maal_in) {
         const resp = await fetch(`${API_URL}/api/maalin/${entry.id}`);
         const detail = await resp.json();
-
         if (detail.success) {
           detail.items.forEach((it) => {
             allItemRows.push({
@@ -79,24 +76,67 @@ export default function MaalIn() {
               rate: it.rate,
               amount: it.amount,
               supplier: entry.supplier_name,
-              source: entry.source,
+              source: entry.source || "local",
             });
           });
         }
       }
 
+      // 2) Feriwala records (owner-facing list)
+      try {
+        const ferRes = await fetch(`${API_URL}/api/feriwala/list?company_id=${company_id}&godown_id=${godown_id}`);
+        const fer = await ferRes.json();
+        if (fer.success && Array.isArray(fer.records)) {
+          for (const r of fer.records) {
+            if (Array.isArray(r.scraps)) {
+              r.scraps.forEach((it) => {
+                allItemRows.push({
+                  id: `${r.id}-${it.material}`,
+                  date: r.date,
+                  material: it.material_name || it.material,
+                  weight: it.weight,
+                  rate: it.rate,
+                  amount: it.amount,
+                  supplier: r.vendor_name || "Feriwala",
+                  source: "feriwala",
+                });
+              });
+            }
+          }
+        }
+      } catch (e) {
+        // continue — feriwala may be unavailable
+      }
+
+      // 3) Kabadiwala entries (owner ledger)
+      try {
+        const kabRes = await fetch(`${API_URL}/api/kabadiwala/owner-list?company_id=${company_id}&godown_id=${godown_id}`);
+        const kab = await kabRes.json();
+        if (kab.success && Array.isArray(kab.entries)) {
+          kab.entries.forEach((it) => {
+            allItemRows.push({
+              id: `${it.kabadi_name || it.vendor_name}-${it.material}-${it.date}`,
+              date: it.date,
+              material: it.material,
+              weight: it.weight,
+              rate: it.rate,
+              amount: it.amount,
+              supplier: it.kabadi_name || it.vendor_name,
+              source: "kabadiwala",
+            });
+          });
+        }
+      } catch (e) {
+        // continue
+      }
+
+      // sort by date desc (today first)
+      allItemRows.sort((a, b) => new Date(b.date) - new Date(a.date));
       setMaalIn(allItemRows);
 
       // SUMMARY
-      const totalWeight = allItemRows.reduce(
-        (s, i) => s + Number(i.weight || 0),
-        0
-      );
-      const totalAmount = allItemRows.reduce(
-        (s, i) => s + Number(i.amount || 0),
-        0
-      );
-
+      const totalWeight = allItemRows.reduce((s, i) => s + Number(i.weight || 0), 0);
+      const totalAmount = allItemRows.reduce((s, i) => s + Number(i.amount || 0), 0);
       setSummary({ totalWeight, totalAmount });
     } catch (err) {
       console.error(err);
@@ -151,10 +191,38 @@ export default function MaalIn() {
               />
             </PopoverContent>
           </Popover>
-
           <Button variant="outline" size="sm" onClick={fetchMaalIn} className="w-full sm:w-auto">
             <RefreshCcw className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">Refresh</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* SEARCH BAR */}
+      <div className="mt-3">
+        <div className="flex gap-2 items-center">
+          <input
+            type="search"
+            placeholder="Search vendor / type / date / material..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="border p-2 rounded flex-1"
+          />
+
+          <select
+            value={searchScope}
+            onChange={(e) => setSearchScope(e.target.value)}
+            className="border p-2 rounded"
+          >
+            <option value="all">All</option>
+            <option value="vendor">Vendor</option>
+            <option value="type">Vendor Type</option>
+            <option value="date">Date</option>
+            <option value="material">Material</option>
+          </select>
+
+          <Button variant="ghost" onClick={() => { setSearchQuery(""); setSearchScope("all"); fetchMaalIn(); }}>
+            Reset
           </Button>
         </div>
       </div>
@@ -210,24 +278,69 @@ export default function MaalIn() {
                 </TableHeader>
 
                 <TableBody>
-                  {maalIn.length === 0 ? (
+                  {(
+                    // apply search filtering
+                    maalIn.filter((m) => {
+                      if (!searchQuery) return true;
+                      const q = searchQuery.toLowerCase();
+                      if (searchScope === "all") {
+                        return (
+                          String(m.supplier || "").toLowerCase().includes(q) ||
+                          String(m.source || "").toLowerCase().includes(q) ||
+                          String(m.material || "").toLowerCase().includes(q) ||
+                          String(m.date || "").toLowerCase().includes(q)
+                        );
+                      }
+                      if (searchScope === "vendor")
+                        return String(m.supplier || "").toLowerCase().includes(q);
+                      if (searchScope === "type")
+                        return String(m.source || "").toLowerCase().includes(q);
+                      if (searchScope === "date")
+                        return String(m.date || "").toLowerCase().includes(q);
+                      if (searchScope === "material")
+                        return String(m.material || "").toLowerCase().includes(q);
+                      return true;
+                    })
+                  ).length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-6">
                         No records found
                       </TableCell>
                     </TableRow>
                   ) : (
-                    maalIn.map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell>{formatDate(m.date)}</TableCell>
-                        <TableCell>{m.material}</TableCell>
-                        <TableCell>{m.weight}</TableCell>
-                        <TableCell>₹{m.rate}</TableCell>
-                        <TableCell className="text-green-600 font-semibold">₹{m.amount}</TableCell>
-                        <TableCell>{m.supplier}</TableCell>
-                        <TableCell>{m.source}</TableCell>
-                      </TableRow>
-                    ))
+                    maalIn
+                      .filter((m) => {
+                        if (!searchQuery) return true;
+                        const q = searchQuery.toLowerCase();
+                        if (searchScope === "all") {
+                          return (
+                            String(m.supplier || "").toLowerCase().includes(q) ||
+                            String(m.source || "").toLowerCase().includes(q) ||
+                            String(m.material || "").toLowerCase().includes(q) ||
+                            String(m.date || "").toLowerCase().includes(q)
+                          );
+                        }
+                        if (searchScope === "vendor")
+                          return String(m.supplier || "").toLowerCase().includes(q);
+                        if (searchScope === "type")
+                          return String(m.source || "").toLowerCase().includes(q);
+                        if (searchScope === "date")
+                          return String(m.date || "").toLowerCase().includes(q);
+                        if (searchScope === "material")
+                          return String(m.material || "").toLowerCase().includes(q);
+                        return true;
+                      })
+                      .map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell>{formatDate(m.date)}</TableCell>
+                          <TableCell>{m.material}</TableCell>
+                          <TableCell>{m.weight}</TableCell>
+                          <TableCell>₹{m.rate}</TableCell>
+                          <TableCell className="text-green-600 font-semibold">₹{m.amount}</TableCell>
+                          <TableCell>{m.supplier}</TableCell>
+                          <TableCell>{m.source}</TableCell>
+                        </TableRow>
+                      ))
                   )}
                 </TableBody>
               </Table>

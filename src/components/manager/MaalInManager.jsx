@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardHeader,
@@ -18,7 +17,6 @@ const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
 export default function MaalInManager() {
-  const navigate = useNavigate();
   const API_URL = getApiBaseUrl();
   const today = new Date().toISOString().split("T")[0];
 
@@ -26,13 +24,10 @@ export default function MaalInManager() {
         STATE
   ========================= */
 
-  const [vendorType, setVendorType] = useState("");
-  const [vendors, setVendors] = useState([]);
   const [scrapTypes, setScrapTypes] = useState([]);
 
   const [form, setForm] = useState({
     date: today,
-    vendor_id: "",
     notes: "",
     scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
   });
@@ -55,82 +50,18 @@ export default function MaalInManager() {
     }
   };
 
-  const loadVendorsByType = async (type) => {
-    try {
-      if (type === "local" || type === "factory") {
-        setVendors([]);
-        return;
-      }
-
-      const res = await fetch(`${API_URL}/api/rates/vendors-with-rates`);
-      const data = await res.json();
-      if (data.success) {
-        setVendors(data.vendors.filter((v) => v.type === type));
-      }
-    } catch {
-      toast.error("Failed to load vendors");
-    }
-  };
-
   /* =========================
         HANDLERS
   ========================= */
 
-  const onVendorTypeChange = (type) => {
-    setVendorType(type);
-    setForm({
-      date: today,
-      vendor_id: "",
-      notes: "",
-      scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
-    });
-    loadVendorsByType(type);
-
-    // Redirect for Feriwala/Kabadiwala
-    if (type === "feriwala") {
-      navigate("/manager/feriwala/add");
-    } else if (type === "kabadiwala") {
-      navigate("/manager/kabadiwala/add");
-    }
-  };
-
-  const onVendorChange = (vendor_id) => {
-    setForm((p) => ({ ...p, vendor_id }));
-
-    const vendor = vendors.find((v) => v.vendor_id === vendor_id);
-    if (!vendor) return;
-
-    setForm((p) => ({
-      ...p,
-      scraps: p.scraps.map((row) => {
-        if (!row.scrap_type_id) return row;
-        const rateObj = vendor.rates.find(
-          (r) => r.scrap_type_id === row.scrap_type_id
-        );
-        const rate = rateObj ? Number(rateObj.vendor_rate) : 0;
-        return {
-          ...row,
-          rate,
-          amount: Number(row.weight || 0) * rate,
-        };
-      }),
-    }));
-  };
+  // Manager Maal In is LOCAL only — rates entered manually.
 
   const onScrapChange = (idx, key, value) => {
     setForm((prev) => {
       const rows = [...prev.scraps];
       rows[idx] = { ...rows[idx], [key]: value };
 
-      const vendor = vendors.find((v) => v.vendor_id === prev.vendor_id);
-
-      if (key === "scrap_type_id" && vendor) {
-        const rateObj = vendor.rates.find(
-          (r) => r.scrap_type_id === value
-        );
-        rows[idx].rate = rateObj ? Number(rateObj.vendor_rate) : 0;
-      }
-
+      // Manual rate / weight -> amount calculation (Local purchase)
       const w = Number(rows[idx].weight || 0);
       const r = Number(rows[idx].rate || 0);
       rows[idx].amount = Number((w * r).toFixed(2));
@@ -163,46 +94,77 @@ export default function MaalInManager() {
   ========================= */
 
   const handleSubmit = async () => {
-    if (!vendorType) return toast.error("Select vendor type");
-
-    if (
-      (vendorType === "feriwala" || vendorType === "kabadiwala") &&
-      !form.vendor_id
-    ) {
-      return toast.error("Select vendor");
+    if (form.scraps.some((s) => !s.scrap_type_id || !s.weight || !s.rate)) {
+      return toast.error("Fill all scrap rows and rates");
     }
 
-    if (form.scraps.some((s) => !s.scrap_type_id || !s.weight)) {
-      return toast.error("Fill all scrap rows");
+    try {
+      // 1) Create Maal In header (source = local)
+      const headerRes = await fetch(`${API_URL}/api/maalin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: COMPANY_ID,
+          godown_id: GODOWN_ID,
+          date: form.date,
+          supplier_name: "Local",
+          source: "local",
+          vehicle_number: null,
+          notes: form.notes,
+          created_by: "manager",
+        }),
+      });
+
+      const headerData = await headerRes.json();
+      if (!headerData.success) {
+        toast.error(headerData.error || "Failed to create maal in header");
+        return;
+      }
+
+      const maalId = headerData.maal_in.id;
+
+      // 2) Post items
+      const items = form.scraps.map((s) => {
+        const material = scrapTypes.find((m) => String(m.id) === String(s.scrap_type_id))?.material_type || "";
+        return {
+          material,
+          weight: Number(s.weight),
+          rate: Number(s.rate),
+          amount: Number(s.amount),
+        };
+      });
+
+      const itemsRes = await fetch(`${API_URL}/api/maalin/${maalId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+
+      const itemsData = await itemsRes.json();
+      if (!itemsData.success) {
+        toast.error(itemsData.error || "Failed to save items");
+        return;
+      }
+
+      toast.success("Local Maal In saved");
+
+      // Reset form
+      setForm({
+        date: today,
+        notes: "",
+        scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error("Server error");
     }
-
-    const payload = {
-      company_id: COMPANY_ID,
-      godown_id: GODOWN_ID,
-      vendor_type: vendorType,
-      vendor_id: form.vendor_id || null,
-      date: form.date,
-      scraps: form.scraps.map((s) => ({
-        scrap_type_id: s.scrap_type_id,
-        weight: Number(s.weight),
-      })),
-      note: form.notes,
-    };
-
-    // backend will route (feriwala / kabadiwala / maal_in)
-    console.log("MAAL IN PAYLOAD:", payload);
-
-    toast.success("Maal In saved (frontend ready)");
   };
 
   /* =========================
         UI
   ========================= */
 
-  // Only show Maal In form for Local/Factory
-  if (vendorType === "feriwala" || vendorType === "kabadiwala") {
-    return null;
-  }
+  // Manager Maal In: Local purchases only (Feriwala/Kabadiwala have separate flows)
 
   return (
     <div className="space-y-6">
@@ -210,26 +172,12 @@ export default function MaalInManager() {
         <CardHeader className="px-4 sm:px-6">
           <CardTitle className="text-lg">Maal In</CardTitle>
           <CardDescription className="text-sm">
-            Purchase entry (Feriwala / Kabadiwala / Local / Factory)
+            Purchase entry (Local purchases only)
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4 px-4 sm:px-6">
-          {/* VENDOR TYPE */}
-          <div>
-            <Label>Vendor Type *</Label>
-            <select
-              className="border p-2 rounded w-full"
-              value={vendorType}
-              onChange={(e) => onVendorTypeChange(e.target.value)}
-            >
-              <option value="">-- select --</option>
-              <option value="feriwala">Feriwala</option>
-              <option value="kabadiwala">Kabadiwala</option>
-              <option value="local">Local</option>
-              <option value="factory">Factory</option>
-            </select>
-          </div>
+          {/* NOTE: manager UI simplified — only Local purchases allowed here */}
 
           {/* DATE */}
           <div>

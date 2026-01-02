@@ -40,6 +40,52 @@ export function getApiBaseUrl() {
   return ONRENDER_API;
 }
 
+// Async resolution: probe candidates and pick the first reachable backend
+const CACHE_KEY = "scrapco_api_url";
+let _resolvedCache = null;
+
+async function probeUrl(url, timeout = 1500) {
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    const res = await fetch(url.replace(/\/$/, "") + "/", { method: "GET", signal: controller.signal, mode: "cors" });
+    clearTimeout(id);
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function resolveApiBaseUrl(preferredBaseUrl = "") {
+  if (_resolvedCache) return _resolvedCache;
+
+  const candidates = getApiBaseUrlCandidates(preferredBaseUrl);
+  for (const c of candidates) {
+    if (!c) continue;
+    const ok = await probeUrl(c);
+    if (ok) {
+      try { localStorage.setItem(CACHE_KEY, c); } catch (e) {}
+      _resolvedCache = c;
+      return c;
+    }
+  }
+
+  // fallback to synchronous result
+  const fallback = getApiBaseUrl();
+  try { localStorage.setItem(CACHE_KEY, fallback); } catch (e) {}
+  _resolvedCache = fallback;
+  return fallback;
+}
+
+export function getResolvedApiBaseUrlSync() {
+  if (_resolvedCache) return _resolvedCache;
+  try {
+    const stored = normalizeBaseUrl(typeof window !== "undefined" ? localStorage.getItem(CACHE_KEY) : "");
+    if (stored) return stored;
+  } catch (e) {}
+  return getApiBaseUrl();
+}
+
 export function getApiBaseUrlCandidates(preferredBaseUrl = "") {
   const candidatesRaw = [
     normalizeBaseUrl(process.env.REACT_APP_API_URL),

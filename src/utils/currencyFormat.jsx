@@ -5,11 +5,16 @@
  * @returns {string} Formatted currency string
  */
 export function formatINR(amount, showSymbol = true) {
-  const formatted = amount.toLocaleString('en-IN', {
+  if (amount === null || amount === undefined || Number.isNaN(Number(amount))) {
+    return showSymbol ? '—' : '—';
+  }
+
+  const num = Number(amount);
+  const formatted = num.toLocaleString('en-IN', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
-  
+
   return showSymbol ? `₹${formatted}` : formatted;
 }
 
@@ -19,7 +24,12 @@ export function formatINR(amount, showSymbol = true) {
  * @returns {string}
  */
 export function formatINRFull(amount) {
-  return `₹ ${amount.toLocaleString('en-IN', {
+  if (amount === null || amount === undefined || Number.isNaN(Number(amount))) {
+    return '—';
+  }
+
+  const num = Number(amount);
+  return `₹ ${num.toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

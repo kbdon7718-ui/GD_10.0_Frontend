@@ -136,7 +136,7 @@ export function FeriwalaManager() {
             weight: Number(s.weight),
           })),
           account_id,
-          payment_mode: "cash",
+         
 
         }),
       });

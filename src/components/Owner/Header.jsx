@@ -20,16 +20,20 @@ export function Header({ darkMode, toggleDarkMode }) {
     <header className="bg-white dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 fixed top-0 w-full z-50">
       <div className="flex items-center justify-between gap-4 flex-wrap">
 
-        {/* Logo */}
+        {/* Branding */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-green-600 flex items-center justify-center">
-            <span className="text-white">SC</span>
-          </div>
-          <div>
-            <h1 className="text-gray-900 dark:text-white">ScrapCo</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              Godown Management
-            </p>
+          <img
+            src="/logo.png"
+            alt="Logo"
+            className="w-10 h-10 rounded-md object-contain"
+          />
+          <div className="leading-tight">
+            <h1 className="text-lg font-semibold">
+              <span className="text-green-600 dark:text-green-400">G</span>
+              <span className="text-green-600 dark:text-green-400">T</span>
+              <span className="text-black dark:text-black">C</span>
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Powered by ScrapCo</p>
           </div>
         </div>
 

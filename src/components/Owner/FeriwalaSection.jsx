@@ -16,16 +16,18 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { RefreshCcw, FileDown } from "lucide-react";
+import { FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { ResizableHistoryModal } from "./ResizableHistoryModal";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 export function FeriwalaSection() {
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const API_URL = getApiBaseUrl();
+  const { setRefreshHandler } = usePageRefresh();
   const company_id = "2f762c5e-5274-4a65-aa66-15a7642a1608";
   const godown_id = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
@@ -83,6 +85,12 @@ export function FeriwalaSection() {
     loadBalances();
   }, []);
 
+  useEffect(() => {
+    setRefreshHandler(loadBalances);
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ===============================
      SEARCH
   =============================== */
@@ -134,9 +142,6 @@ export function FeriwalaSection() {
           </p>
         </div>
 
-        <Button variant="outline" size="sm" onClick={loadBalances} className="w-fit">
-          <RefreshCcw className="w-4 h-4 mr-2" /> Refresh
-        </Button>
       </div>
 
       {/* SEARCH */}
@@ -160,9 +165,9 @@ export function FeriwalaSection() {
               <p
                 className={`text-2xl font-bold ${
                   v.balance > 0
-                    ? "text-red-600"
-                    : v.balance < 0
                     ? "text-green-600"
+                    : v.balance < 0
+                    ? "text-red-600"
                     : ""
                 }`}
               >

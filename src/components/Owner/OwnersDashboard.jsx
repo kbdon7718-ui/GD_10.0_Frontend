@@ -15,9 +15,11 @@ import {
   Factory,
   Settings,
   LogOut,
+  RefreshCcw,
 } from "lucide-react";
 
 import { useAuth } from "../../utils/authContext";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 /* SECTIONS */
 import DashboardOverview from "./DashboardOverview";
@@ -48,6 +50,7 @@ function NavBtn({ active, onClick, icon, label, highlight }) {
 
 export function OwnersDashboard() {
   const { user, logout } = useAuth();
+  const { refresh, hasHandler } = usePageRefresh();
 
   const [activeTab, setActiveTab] = useState("dashboard");
 
@@ -64,19 +67,33 @@ export function OwnersDashboard() {
       <div className="sticky top-0 z-40 bg-white px-4 py-4 flex justify-between items-center shadow-sm">
           <div>
             <h1 className="text-xl font-bold tracking-wide text-emerald-600">
-            Scrap<span className="text-gray-800">Co</span>
+            GT<span className="text-gray-800">C</span>
           </h1>
-            <p className="text-xs text-gray-600 mt-1 font-medium">Owner Dashboard</p>
+            <p className="text-xs text-gray-600 mt-1 font-medium">Powered By ScrapCo.</p>
           </div>
 
-          <Button
-            size="icon"
-            variant="ghost"
-            className="text-black hover:bg-white/20"
-            onClick={() => setActiveTab("settings")}
-          >
-            <Settings />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="text-black hover:bg-white/20"
+              onClick={refresh}
+              disabled={!hasHandler}
+              aria-label="Refresh"
+            >
+              <RefreshCcw />
+            </Button>
+
+            <Button
+              size="icon"
+              variant="ghost"
+              className="text-black hover:bg-white/20"
+              onClick={() => setActiveTab("settings")}
+              aria-label="Settings"
+            >
+              <Settings />
+            </Button>
+          </div>
       </div>
 
       {/* ================= CONTENT ================= */}

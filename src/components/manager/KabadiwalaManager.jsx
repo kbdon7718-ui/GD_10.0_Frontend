@@ -13,9 +13,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from "../ui/table";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, X, IndianRupee, RefreshCcw } from "lucide-react";
+import { Plus, Trash2, Save, X, IndianRupee } from "lucide-react";
 import { formatDate } from "../../utils/dateFormat";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
@@ -24,7 +25,8 @@ export function KabadiwalaManager() {
   const [vendors, setVendors] = useState([]);
   const [scrapTypes, setScrapTypes] = useState([]);
   const [records, setRecords] = useState([]);
-  const [isAdding, setIsAdding] = useState(false);
+  const [activeForm, setActiveForm] = useState("purchase");
+  const { setRefreshHandler } = usePageRefresh();
 
   // NEW: daily balance info
   const [balanceInfo, setBalanceInfo] = useState({
@@ -47,11 +49,7 @@ export function KabadiwalaManager() {
     date: new Date().toISOString().split("T")[0],
     vendor_id: "",
     vehicle_number: "",
-    notes: "",
     scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
-    payment_amount: 0,
-    payment_mode: "cash",
-    account_id: ""
   });
 
   useEffect(() => {
@@ -59,6 +57,18 @@ export function KabadiwalaManager() {
     loadScrapTypes();
     fetchList();
   }, []);
+
+  useEffect(() => {
+    setRefreshHandler(() => {
+      loadVendors();
+      loadScrapTypes();
+      fetchList();
+      if (form.vendor_id) fetchBalanceForVendor(form.vendor_id, form.date);
+    });
+
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.vendor_id, form.date]);
 
   // Fetch vendors
   const loadVendors = async () => {
@@ -209,11 +219,7 @@ export function KabadiwalaManager() {
           scrap_type_id: s.scrap_type_id,
           weight: Number(s.weight)
         })),
-        payment_amount: Number(form.payment_amount || 0),
-        payment_mode: form.payment_mode,
-        account_id: form.account_id || null,
         date: form.date,
-        note: form.notes
       };
 
       const res = await fetch(`${API_URL}/api/kabadiwala/add`, {
@@ -229,16 +235,11 @@ export function KabadiwalaManager() {
         fetchList();
         fetchBalanceForVendor(form.vendor_id, form.date);
 
-        setIsAdding(false);
         setForm({
           date: new Date().toISOString().split("T")[0],
           vendor_id: "",
           vehicle_number: "",
-          notes: "",
           scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
-          payment_amount: 0,
-          payment_mode: "cash",
-          account_id: ""
         });
       } else toast.error(data.error);
     } catch {
@@ -274,6 +275,29 @@ export function KabadiwalaManager() {
         fetchList();
         fetchBalanceForVendor(payForm.vendor_id, payForm.date);
 
+        const vendor = vendors.find((v) => v.vendor_id === payForm.vendor_id);
+        try {
+          await fetch(`${API_URL}/api/expenses`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              company_id: COMPANY_ID,
+              godown_id: GODOWN_ID,
+              date: payForm.date,
+              category: "Kabadiwala",
+              description: payForm.note || "",
+              amount: Number(payForm.amount),
+              payment_mode: payForm.mode === "bank" ? "Bank" : "Cash",
+              paid_to: vendor?.vendor_name || "",
+              labour_id: null,
+              vendor_id: payForm.vendor_id,
+              vendor_type: "kabadiwala",
+            }),
+          });
+        } catch {
+          toast.error("Payment saved, but expense entry failed");
+        }
+
         setPayForm({
           vendor_id: "",
           amount: "",
@@ -281,6 +305,7 @@ export function KabadiwalaManager() {
           note: "",
           date: new Date().toISOString().split("T")[0],
         });
+        setActiveForm("purchase");
       } else toast.error(data.error || "Payment failed");
     } catch {
       toast.error("Server error");
@@ -346,23 +371,19 @@ export function KabadiwalaManager() {
         </CardContent>
       </Card>
 */}
-   {/* PURCHASE FORM (Same as Feriwala but for Kabadiwala) */}
+   {activeForm === "purchase" ? (
 <Card>
   <CardHeader className="px-4 sm:px-6">
     <div className="flex justify-between items-center">
-      <CardTitle className="text-lg">Add Kabadiwala Purchase</CardTitle>
-
-      {!isAdding && (
-        <Button size="sm" onClick={() => setIsAdding(true)}>
-          <Plus className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Add Purchase</span>
-        </Button>
-      )}
+      <CardTitle className="text-lg">Add Purchase</CardTitle>
+      <Button size="sm" variant="outline" onClick={() => setActiveForm("withdrawal")}>
+        <IndianRupee className="h-4 w-4 sm:mr-2" />
+        <span className="hidden sm:inline">Record Withdrawal</span>
+      </Button>
     </div>
   </CardHeader>
 
   <CardContent className="px-4 sm:px-6">
-    {isAdding && (
       <form className="space-y-4" onSubmit={handleSubmit}>
 
         {/* SELECT KABADIWALA */}
@@ -445,45 +466,6 @@ export function KabadiwalaManager() {
           <Plus className="mr-2" /> Add More
         </Button>
 
-        {/* PAYMENT INPUT (Optional) */}
-        <div className="grid grid-cols-3 gap-4 mt-4">
-          <div>
-            <Label>Payment Amount</Label>
-            <Input
-              type="number"
-              value={form.payment_amount}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, payment_amount: e.target.value }))
-              }
-            />
-          </div>
-
-          <div>
-            <Label>Payment Mode</Label>
-            <select
-              className="border p-2 rounded w-full"
-              value={form.payment_mode}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, payment_mode: e.target.value }))
-              }
-            >
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-              <option value="bank">Bank</option>
-            </select>
-          </div>
-
-          <div>
-            <Label>Notes</Label>
-            <Input
-              value={form.notes}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, notes: e.target.value }))
-              }
-            />
-          </div>
-        </div>
-
         {/* Save / Cancel */}
         <div className="flex gap-3 mt-4">
           <Button type="submit">
@@ -494,16 +476,11 @@ export function KabadiwalaManager() {
             type="button"
             variant="outline"
             onClick={() => {
-              setIsAdding(false);
               setForm({
                 date: new Date().toISOString().split("T")[0],
                 vendor_id: "",
                 vehicle_number: "",
-                notes: "",
                 scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
-                payment_amount: 0,
-                payment_mode: "cash",
-                account_id: ""
               });
             }}
           >
@@ -511,20 +488,25 @@ export function KabadiwalaManager() {
           </Button>
         </div>
       </form>
-    )}
   </CardContent>
 </Card>
-
-
-      {/* PAYMENT FORM */}
+   ) : (
       <Card>
         <CardHeader>
-          <CardTitle>Record Payment</CardTitle>
-          <CardDescription>Money paid to Kabadiwala</CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Record Withdrawal</CardTitle>
+              <CardDescription>Money paid to Kabadiwala</CardDescription>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setActiveForm("purchase")}>
+              <X className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Back</span>
+            </Button>
+          </div>
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={submitPayment} className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <form onSubmit={submitPayment} className="grid grid-cols-1 md:grid-cols-5 gap-3">
 
             <div>
               <Label></Label>
@@ -559,6 +541,18 @@ export function KabadiwalaManager() {
               />
             </div>
 
+            <div>
+              <Label></Label>
+              <select
+                className="border p-2 rounded w-full"
+                value={payForm.mode}
+                onChange={(e) => setPayForm(prev => ({ ...prev, mode: e.target.value }))}
+              >
+                <option value="cash">Cash</option>
+                <option value="bank">Bank</option>
+              </select>
+            </div>
+
           
             <div>
               <Label></Label>
@@ -570,24 +564,29 @@ export function KabadiwalaManager() {
               />
             </div>
 
-            <div className="col-span-4 flex gap-2 mt-3">
+            <div className="col-span-5 flex gap-2 mt-3">
               <Button type="submit">
-                <IndianRupee className="mr-2" /> Record Payment
+                <IndianRupee className="mr-2" /> Record Withdrawal
               </Button>
-              <Button type="button" variant="outline" onClick={() => setPayForm({
-                vendor_id: "",
-                amount: "",
-                mode: "cash",
-                note: "",
-                date: new Date().toISOString().split("T")[0],
-              })}>
-                Reset
+              <Button type="button" variant="outline" onClick={() => {
+                setPayForm({
+                  vendor_id: "",
+                  amount: "",
+                  mode: "cash",
+                  note: "",
+                  date: new Date().toISOString().split("T")[0],
+                });
+                setActiveForm("purchase");
+              }}>
+                <X className="mr-2" /> Back
               </Button>
             </div>
 
           </form>
         </CardContent>
       </Card>
+
+   )}
 
       {/* (Existing summary + form + table remain unchanged below) */}
       {/* -- YOUR EXISTING PURCHASE FORM CODE GOES HERE (not repeated) -- */}

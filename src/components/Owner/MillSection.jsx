@@ -10,12 +10,13 @@ import { Label } from "../ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
-import { Calendar, RefreshCcw, Plus, Download, Pencil, Trash2 } from "lucide-react";
+import { Calendar, Plus, Download, Pencil, Trash2 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { toast } from "sonner";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
@@ -32,8 +33,10 @@ const askConfirm = (message) =>
 export function MillSection() {
   const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const { setRefreshHandler } = usePageRefresh();
   const [sales, setSales] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [salesForOptions, setSalesForOptions] = useState([]);
   // filterDate can be daily "YYYY-MM-DD" or monthly "YYYY-MM"
   //const [filterDate, setFilterDate] = useState(new Date().toISOString().split("T")[0]);
 
@@ -46,8 +49,8 @@ export function MillSection() {
     ship_to: "",
     date: new Date().toISOString().split("T")[0],
     weight: 0,
-    bill_rate: 0,
-    original_rate: 0,
+    bill_rate: "0.00",
+    original_rate: "0.00",
     gst_percent: 0,
     freight: 0,
     vehicle_no: "",
@@ -62,6 +65,33 @@ export function MillSection() {
     amount: 0,
     date: new Date().toISOString().split("T")[0],
   });
+
+  const getUniqueValues = (arr, field) => {
+    const vals = (arr || [])
+      .map((s) => s?.[field])
+      .filter((v) => v != null && String(v).trim() !== "")
+      .map((v) => String(v).trim());
+    return Array.from(new Set(vals));
+  };
+
+  const firmOptions = getUniqueValues(salesForOptions, "firm_name");
+  const billToOptions = getUniqueValues(salesForOptions, "bill_to");
+  const shipToOptions = getUniqueValues(salesForOptions, "ship_to");
+
+  const normalizeRateString = (raw) => {
+    const n = Number(raw);
+    const safe = Number.isFinite(n) ? n : 0;
+    const clamped = Math.max(0, safe);
+    const rounded = Math.round(clamped * 10) / 10; // nearest 0.10
+    return rounded.toFixed(2);
+  };
+
+  const changeRateByTenth = (setter, obj, field, delta) => {
+    const cur = Number(obj?.[field]) || 0;
+    const next = Math.max(0, cur + delta);
+    const rounded = Math.round(next * 10) / 10;
+    setter({ ...obj, [field]: rounded.toFixed(2) });
+  };
 
   /* ===========================
       EDIT STATES
@@ -109,10 +139,36 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
   };
 
   useEffect(() => {
+    setRefreshHandler(() => {
+      fetchSales();
+      fetchPayments();
+    });
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterDate]);
+
+  const fetchSalesForOptions = async () => {
+    try {
+      const url = `${API_URL}/api/maalOut/list-sales?company_id=${COMPANY_ID}&godown_id=${GODOWN_ID}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) setSalesForOptions(data.sales || []);
+    } catch {
+      // non-blocking
+    }
+  };
+
+  useEffect(() => {
     fetchSales();
     fetchPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterDate]);
+
+  useEffect(() => {
+    if (!API_URL) return;
+    fetchSalesForOptions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [API_URL]);
 
   const handleMonthChange = (monthValue) => {
     // monthValue like "2025-11"
@@ -126,12 +182,24 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
   const handleAddSale = async (e) => {
     e.preventDefault();
 
-    const bill_amount = Number(saleForm.weight || 0) * Number(saleForm.bill_rate || 0);
-    const original_amount = Number(saleForm.weight || 0) * Number(saleForm.original_rate || 0);
+    const normalizedBillRate = normalizeRateString(saleForm.bill_rate);
+    const normalizedOriginalRate = normalizeRateString(saleForm.original_rate);
+    const bill_amount = Number(saleForm.weight || 0) * (Number(normalizedBillRate) || 0);
+    const original_amount = Number(saleForm.weight || 0) * (Number(normalizedOriginalRate) || 0);
     const gst_amount = (bill_amount * Number(saleForm.gst_percent || 0)) / 100;
 
     const payload = {
-      ...saleForm,
+      firm_name: saleForm.firm_name,
+      bill_to: saleForm.bill_to,
+      ship_to: saleForm.ship_to,
+      date: saleForm.date,
+      weight: Number(saleForm.weight || 0),
+      bill_rate: Number(normalizedBillRate),
+      original_rate: Number(normalizedOriginalRate),
+      gst_percent: Number(saleForm.gst_percent || 0),
+      freight: Number(saleForm.freight || 0),
+      vehicle_no: saleForm.vehicle_no,
+      freight_payment_status: saleForm.freight_payment_status,
       company_id: COMPANY_ID,
       godown_id: GODOWN_ID,
       bill_amount,
@@ -149,14 +217,15 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
       if (!data.success) return toast.error(data.error || "Failed to add sale");
       toast.success("Sale added successfully");
       fetchSales();
+      fetchSalesForOptions();
       setSaleForm({
         firm_name: "",
         bill_to: "",
         ship_to: "",
         date: new Date().toISOString().split("T")[0],
         weight: 0,
-        bill_rate: 0,
-        original_rate: 0,
+        bill_rate: "0.00",
+        original_rate: "0.00",
         gst_percent: 0,
         freight: 0,
         vehicle_no: "",
@@ -176,8 +245,10 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
     e.preventDefault();
     if (!editSaleForm || !editSaleForm.id) return;
 
-    const bill_amount = Number(editSaleForm.weight || 0) * Number(editSaleForm.bill_rate || 0);
-    const original_amount = Number(editSaleForm.weight || 0) * Number(editSaleForm.original_rate || 0);
+    const normalizedBillRate = normalizeRateString(editSaleForm.bill_rate);
+    const normalizedOriginalRate = normalizeRateString(editSaleForm.original_rate);
+    const bill_amount = Number(editSaleForm.weight || 0) * (Number(normalizedBillRate) || 0);
+    const original_amount = Number(editSaleForm.weight || 0) * (Number(normalizedOriginalRate) || 0);
     const gst_amount = (bill_amount * Number(editSaleForm.gst_percent || 0)) / 100;
 
     const payload = {
@@ -186,9 +257,9 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
       ship_to: editSaleForm.ship_to,
       date: editSaleForm.date,
       weight: editSaleForm.weight,
-      bill_rate: editSaleForm.bill_rate,
+      bill_rate: Number(normalizedBillRate),
       bill_amount,
-      original_rate: editSaleForm.original_rate,
+      original_rate: Number(normalizedOriginalRate),
       original_amount,
       gst_percent: editSaleForm.gst_percent,
       gst_amount,
@@ -208,6 +279,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
       toast.success("Sale updated");
       setEditSaleForm(null);
       fetchSales();
+      fetchSalesForOptions();
     } catch (err) {
       console.error(err);
       toast.error("Error updating sale");
@@ -386,17 +458,6 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
       </Popover>
 
       
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              fetchSales();
-              fetchPayments();
-            }}
-          >
-            <RefreshCcw className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
         </div>
       </div>
 
@@ -440,16 +501,137 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
               <DialogContent className="max-w-3xl">
                 <DialogHeader><DialogTitle>Add Sale</DialogTitle></DialogHeader>
                 <form className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4" onSubmit={handleAddSale}>
-                  <div><Label>Firm Name</Label><Input required value={saleForm.firm_name} onChange={(e)=>setSaleForm({...saleForm, firm_name: e.target.value})} /></div>
-                  <div><Label>Bill To</Label><Input required value={saleForm.bill_to} onChange={(e)=>setSaleForm({...saleForm, bill_to: e.target.value})} /></div>
-                  <div><Label>Ship To</Label><Input value={saleForm.ship_to} onChange={(e)=>setSaleForm({...saleForm, ship_to: e.target.value})} /></div>
+                  <div>
+                    <Label>Firm Name</Label>
+                    <Input
+                      required
+                      list="mill-firm-name-options"
+                      value={saleForm.firm_name}
+                      onChange={(e) =>
+                        setSaleForm({ ...saleForm, firm_name: e.target.value })
+                      }
+                    />
+                    <datalist id="mill-firm-name-options">
+                      {firmOptions.map((v) => (
+                        <option key={v} value={v} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <Label>Bill To</Label>
+                    <Input
+                      required
+                      list="mill-bill-to-options"
+                      value={saleForm.bill_to}
+                      onChange={(e) =>
+                        setSaleForm({ ...saleForm, bill_to: e.target.value })
+                      }
+                    />
+                    <datalist id="mill-bill-to-options">
+                      {billToOptions.map((v) => (
+                        <option key={v} value={v} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <Label>Ship To</Label>
+                    <Input
+                      list="mill-ship-to-options"
+                      value={saleForm.ship_to}
+                      onChange={(e) =>
+                        setSaleForm({ ...saleForm, ship_to: e.target.value })
+                      }
+                    />
+                    <datalist id="mill-ship-to-options">
+                      {shipToOptions.map((v) => (
+                        <option key={v} value={v} />
+                      ))}
+                    </datalist>
+                  </div>
                   <div><Label>Date</Label><Input type="date" required value={saleForm.date} onChange={(e)=>setSaleForm({...saleForm, date: e.target.value})} /></div>
                   <div><Label>Vehicle No</Label><Input value={saleForm.vehicle_no} onChange={(e)=>setSaleForm({...saleForm, vehicle_no: e.target.value})} /></div>
 
                   <div><Label>Weight (kg)</Label><Input type="number" required value={saleForm.weight} onChange={(e)=>setSaleForm({...saleForm, weight: Number(e.target.value)})} /></div>
-                  <div><Label>Bill Rate (₹/kg)</Label><Input type="number" required value={saleForm.bill_rate} onChange={(e)=>setSaleForm({...saleForm, bill_rate: Number(e.target.value)})} /></div>
+                  <div>
+                    <Label>Bill Rate (₹/kg)</Label>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() =>
+                          changeRateByTenth(setSaleForm, saleForm, "bill_rate", -0.1)
+                        }
+                      >
+                        -
+                      </Button>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        required
+                        value={saleForm.bill_rate}
+                        onChange={(e) =>
+                          setSaleForm({ ...saleForm, bill_rate: e.target.value })
+                        }
+                        onBlur={(e) =>
+                          setSaleForm({
+                            ...saleForm,
+                            bill_rate: normalizeRateString(e.target.value),
+                          })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() =>
+                          changeRateByTenth(setSaleForm, saleForm, "bill_rate", 0.1)
+                        }
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
 
-                  <div><Label>Original Rate (₹/kg)</Label><Input type="number" required value={saleForm.original_rate} onChange={(e)=>setSaleForm({...saleForm, original_rate: Number(e.target.value)})} /></div>
+                  <div>
+                    <Label>Original Rate (₹/kg)</Label>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() =>
+                          changeRateByTenth(setSaleForm, saleForm, "original_rate", -0.1)
+                        }
+                      >
+                        -
+                      </Button>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        required
+                        value={saleForm.original_rate}
+                        onChange={(e) =>
+                          setSaleForm({
+                            ...saleForm,
+                            original_rate: e.target.value,
+                          })
+                        }
+                        onBlur={(e) =>
+                          setSaleForm({
+                            ...saleForm,
+                            original_rate: normalizeRateString(e.target.value),
+                          })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() =>
+                          changeRateByTenth(setSaleForm, saleForm, "original_rate", 0.1)
+                        }
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
                   <div><Label>GST %</Label><Input type="number" value={saleForm.gst_percent} onChange={(e)=>setSaleForm({...saleForm, gst_percent: Number(e.target.value)})} /></div>
 
                   <div><Label>Freight (₹)</Label><Input type="number" value={saleForm.freight} onChange={(e)=>setSaleForm({...saleForm, freight: Number(e.target.value)})} /></div>
@@ -465,9 +647,22 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                   </div>
 
                   <div className="col-span-2 p-3 border rounded bg-gray-50">
-                    <p>Bill Amount: ₹{(saleForm.weight * saleForm.bill_rate).toLocaleString()}</p>
-                    <p>Original Amount: ₹{(saleForm.weight * saleForm.original_rate).toLocaleString()}</p>
-                    <p>GST Amount: ₹{(((saleForm.weight * saleForm.bill_rate) * saleForm.gst_percent) / 100).toLocaleString()}</p>
+                    <p>
+                      Bill Amount: ₹
+                      {(Number(saleForm.weight || 0) * (Number(saleForm.bill_rate) || 0)).toLocaleString()}
+                    </p>
+                    <p>
+                      Original Amount: ₹
+                      {(Number(saleForm.weight || 0) * (Number(saleForm.original_rate) || 0)).toLocaleString()}
+                    </p>
+                    <p>
+                      GST Amount: ₹
+                      {(
+                        ((Number(saleForm.weight || 0) * (Number(saleForm.bill_rate) || 0)) *
+                          Number(saleForm.gst_percent || 0)) /
+                        100
+                      ).toLocaleString()}
+                    </p>
                   </div>
 
                   <div className="col-span-2 flex justify-end pt-2">
@@ -513,17 +708,13 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                       <TableCell>{s.bill_to}</TableCell>
                       <TableCell>{s.ship_to}</TableCell>
                       <TableCell>{formatDate(s.date)}</TableCell>
-
                       <TableCell>{s.weight}</TableCell>
                       <TableCell>₹{s.bill_rate}</TableCell>
                       <TableCell>₹{s.bill_amount}</TableCell>
-
                       <TableCell>₹{s.original_rate}</TableCell>
                       <TableCell>₹{s.original_amount}</TableCell>
-
                       <TableCell>{s.gst_percent}%</TableCell>
                       <TableCell>₹{s.gst_amount}</TableCell>
-
                       <TableCell>₹{s.freight}</TableCell>
                       <TableCell>
                         {s.freight_payment_status === "paid" ? (
@@ -532,16 +723,10 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                           <span className="text-red-600 font-semibold">PENDING</span>
                         )}
                       </TableCell>
-
-                      <TableCell className="font-bold text-blue-600">
-                        ₹{s.total_invoice_amount}
-                      </TableCell>
-
+                      <TableCell className="font-bold text-blue-600">₹{s.total_invoice_amount}</TableCell>
                       <TableCell>{s.vehicle_no}</TableCell>
-
                       <TableCell>
                         <div className="flex gap-2">
-                          {/* Edit Sale — clicking button pre-fills and opens dialog */}
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button
@@ -555,13 +740,12 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                     ship_to: s.ship_to,
                                     date: s.date,
                                     weight: Number(s.weight) || 0,
-                                    bill_rate: Number(s.bill_rate) || 0,
-                                    original_rate: Number(s.original_rate) || 0,
+                                    bill_rate: normalizeRateString(s.bill_rate),
+                                    original_rate: normalizeRateString(s.original_rate),
                                     gst_percent: Number(s.gst_percent) || 0,
                                     freight: Number(s.freight) || 0,
                                     vehicle_no: s.vehicle_no || "",
-                                    freight_payment_status:
-                                      s.freight_payment_status || "pending",
+                                    freight_payment_status: s.freight_payment_status || "pending",
                                   });
                                 }}
                               >
@@ -582,12 +766,10 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                     <Label>Firm Name</Label>
                                     <Input
                                       required
+                                      list="mill-firm-name-options"
                                       value={editSaleForm.firm_name}
                                       onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          firm_name: e.target.value,
-                                        })
+                                        setEditSaleForm({ ...editSaleForm, firm_name: e.target.value })
                                       }
                                     />
                                   </div>
@@ -595,24 +777,20 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                     <Label>Bill To</Label>
                                     <Input
                                       required
+                                      list="mill-bill-to-options"
                                       value={editSaleForm.bill_to}
                                       onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          bill_to: e.target.value,
-                                        })
+                                        setEditSaleForm({ ...editSaleForm, bill_to: e.target.value })
                                       }
                                     />
                                   </div>
                                   <div>
                                     <Label>Ship To</Label>
                                     <Input
+                                      list="mill-ship-to-options"
                                       value={editSaleForm.ship_to}
                                       onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          ship_to: e.target.value,
-                                        })
+                                        setEditSaleForm({ ...editSaleForm, ship_to: e.target.value })
                                       }
                                     />
                                   </div>
@@ -623,23 +801,16 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                       required
                                       value={editSaleForm.date}
                                       onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          date: e.target.value,
-                                        })
+                                        setEditSaleForm({ ...editSaleForm, date: e.target.value })
                                       }
                                     />
                                   </div>
-
                                   <div>
                                     <Label>Vehicle No</Label>
                                     <Input
                                       value={editSaleForm.vehicle_no}
                                       onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          vehicle_no: e.target.value,
-                                        })
+                                        setEditSaleForm({ ...editSaleForm, vehicle_no: e.target.value })
                                       }
                                     />
                                   </div>
@@ -650,53 +821,103 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                       required
                                       value={editSaleForm.weight}
                                       onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          weight: Number(e.target.value),
-                                        })
+                                        setEditSaleForm({ ...editSaleForm, weight: Number(e.target.value) })
                                       }
                                     />
                                   </div>
-
                                   <div>
                                     <Label>Bill Rate (₹/kg)</Label>
-                                    <Input
-                                      type="number"
-                                      required
-                                      value={editSaleForm.bill_rate}
-                                      onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          bill_rate: Number(e.target.value),
-                                        })
-                                      }
-                                    />
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() =>
+                                          changeRateByTenth(setEditSaleForm, editSaleForm, "bill_rate", -0.1)
+                                        }
+                                      >
+                                        -
+                                      </Button>
+                                      <Input
+                                        type="number"
+                                        step="0.1"
+                                        required
+                                        value={editSaleForm.bill_rate}
+                                        onChange={(e) =>
+                                          setEditSaleForm({ ...editSaleForm, bill_rate: e.target.value })
+                                        }
+                                        onBlur={(e) =>
+                                          setEditSaleForm({
+                                            ...editSaleForm,
+                                            bill_rate: normalizeRateString(e.target.value),
+                                          })
+                                        }
+                                      />
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() =>
+                                          changeRateByTenth(setEditSaleForm, editSaleForm, "bill_rate", 0.1)
+                                        }
+                                      >
+                                        +
+                                      </Button>
+                                    </div>
                                   </div>
                                   <div>
                                     <Label>Original Rate (₹/kg)</Label>
-                                    <Input
-                                      type="number"
-                                      required
-                                      value={editSaleForm.original_rate}
-                                      onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          original_rate: Number(e.target.value),
-                                        })
-                                      }
-                                    />
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() =>
+                                          changeRateByTenth(
+                                            setEditSaleForm,
+                                            editSaleForm,
+                                            "original_rate",
+                                            -0.1
+                                          )
+                                        }
+                                      >
+                                        -
+                                      </Button>
+                                      <Input
+                                        type="number"
+                                        step="0.1"
+                                        required
+                                        value={editSaleForm.original_rate}
+                                        onChange={(e) =>
+                                          setEditSaleForm({ ...editSaleForm, original_rate: e.target.value })
+                                        }
+                                        onBlur={(e) =>
+                                          setEditSaleForm({
+                                            ...editSaleForm,
+                                            original_rate: normalizeRateString(e.target.value),
+                                          })
+                                        }
+                                      />
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() =>
+                                          changeRateByTenth(
+                                            setEditSaleForm,
+                                            editSaleForm,
+                                            "original_rate",
+                                            0.1
+                                          )
+                                        }
+                                      >
+                                        +
+                                      </Button>
+                                    </div>
                                   </div>
-
                                   <div>
                                     <Label>GST %</Label>
                                     <Input
                                       type="number"
                                       value={editSaleForm.gst_percent}
                                       onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          gst_percent: Number(e.target.value),
-                                        })
+                                        setEditSaleForm({ ...editSaleForm, gst_percent: Number(e.target.value) })
                                       }
                                     />
                                   </div>
@@ -706,23 +927,16 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                       type="number"
                                       value={editSaleForm.freight}
                                       onChange={(e) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          freight: Number(e.target.value),
-                                        })
+                                        setEditSaleForm({ ...editSaleForm, freight: Number(e.target.value) })
                                       }
                                     />
                                   </div>
-
                                   <div>
                                     <Label>Freight Payment Status</Label>
                                     <Select
                                       value={editSaleForm.freight_payment_status}
                                       onValueChange={(v) =>
-                                        setEditSaleForm({
-                                          ...editSaleForm,
-                                          freight_payment_status: v,
-                                        })
+                                        setEditSaleForm({ ...editSaleForm, freight_payment_status: v })
                                       }
                                     >
                                       <SelectTrigger>
@@ -739,21 +953,23 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                     <p>
                                       Bill Amount: ₹
                                       {(
-                                        editSaleForm.weight * editSaleForm.bill_rate
+                                        Number(editSaleForm.weight || 0) *
+                                        (Number(editSaleForm.bill_rate) || 0)
                                       ).toLocaleString()}
                                     </p>
                                     <p>
                                       Original Amount: ₹
                                       {(
-                                        editSaleForm.weight *
-                                        editSaleForm.original_rate
+                                        Number(editSaleForm.weight || 0) *
+                                        (Number(editSaleForm.original_rate) || 0)
                                       ).toLocaleString()}
                                     </p>
                                     <p>
                                       GST Amount: ₹
                                       {(
-                                        ((editSaleForm.weight * editSaleForm.bill_rate) *
-                                          editSaleForm.gst_percent) /
+                                        ((Number(editSaleForm.weight || 0) *
+                                          (Number(editSaleForm.bill_rate) || 0)) *
+                                          Number(editSaleForm.gst_percent || 0)) /
                                         100
                                       ).toLocaleString()}
                                     </p>
@@ -790,16 +1006,13 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                             </DialogContent>
                           </Dialog>
 
-                          {/* Download */}
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => handleDownloadInvoice(s.id)}
                           >
-                            <Download className="h-4 w-4" />
+                            <Download className="h-4 w-4 text-blue-600" />
                           </Button>
-
-                          {/* Delete (quick) */}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -821,12 +1034,8 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <CardTitle className="text-base truncate">
-                          {s.firm_name}
-                        </CardTitle>
-                        <p className="text-sm text-gray-600">
-                          {formatDate(s.date)}
-                        </p>
+                        <CardTitle className="text-base truncate">{s.firm_name}</CardTitle>
+                        <p className="text-sm text-gray-600">{formatDate(s.date)}</p>
                       </div>
                       <div className="text-right">
                         <div className="text-lg font-semibold text-blue-600">
@@ -871,13 +1080,12 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                 ship_to: s.ship_to,
                                 date: s.date,
                                 weight: Number(s.weight) || 0,
-                                bill_rate: Number(s.bill_rate) || 0,
-                                original_rate: Number(s.original_rate) || 0,
+                                bill_rate: normalizeRateString(s.bill_rate),
+                                original_rate: normalizeRateString(s.original_rate),
                                 gst_percent: Number(s.gst_percent) || 0,
                                 freight: Number(s.freight) || 0,
                                 vehicle_no: s.vehicle_no || "",
-                                freight_payment_status:
-                                  s.freight_payment_status || "pending",
+                                freight_payment_status: s.freight_payment_status || "pending",
                               });
                             }}
                           >
@@ -890,28 +1098,146 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                             <DialogTitle>Edit Sale</DialogTitle>
                           </DialogHeader>
                           {editSaleForm && (
-                            <form
-                              className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4"
-                              onSubmit={submitEditSale}
-                            >
-                              <div><Label>Firm Name</Label><Input required value={editSaleForm.firm_name} onChange={(e)=>setEditSaleForm({...editSaleForm, firm_name: e.target.value})} /></div>
-                              <div><Label>Bill To</Label><Input required value={editSaleForm.bill_to} onChange={(e)=>setEditSaleForm({...editSaleForm, bill_to: e.target.value})} /></div>
-                              <div><Label>Ship To</Label><Input value={editSaleForm.ship_to} onChange={(e)=>setEditSaleForm({...editSaleForm, ship_to: e.target.value})} /></div>
-                              <div><Label>Date</Label><Input type="date" required value={editSaleForm.date} onChange={(e)=>setEditSaleForm({...editSaleForm, date: e.target.value})} /></div>
+                            <form className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4" onSubmit={submitEditSale}>
+                              <div>
+                                <Label>Firm Name</Label>
+                                <Input
+                                  required
+                                  list="mill-firm-name-options"
+                                  value={editSaleForm.firm_name}
+                                  onChange={(e) => setEditSaleForm({ ...editSaleForm, firm_name: e.target.value })}
+                                />
+                              </div>
+                              <div>
+                                <Label>Bill To</Label>
+                                <Input
+                                  required
+                                  list="mill-bill-to-options"
+                                  value={editSaleForm.bill_to}
+                                  onChange={(e) => setEditSaleForm({ ...editSaleForm, bill_to: e.target.value })}
+                                />
+                              </div>
+                              <div>
+                                <Label>Ship To</Label>
+                                <Input
+                                  list="mill-ship-to-options"
+                                  value={editSaleForm.ship_to}
+                                  onChange={(e) => setEditSaleForm({ ...editSaleForm, ship_to: e.target.value })}
+                                />
+                              </div>
+                              <div>
+                                <Label>Date</Label>
+                                <Input
+                                  type="date"
+                                  required
+                                  value={editSaleForm.date}
+                                  onChange={(e) => setEditSaleForm({ ...editSaleForm, date: e.target.value })}
+                                />
+                              </div>
 
-                              <div><Label>Vehicle No</Label><Input value={editSaleForm.vehicle_no} onChange={(e)=>setEditSaleForm({...editSaleForm, vehicle_no: e.target.value})} /></div>
-                              <div><Label>Weight (kg)</Label><Input type="number" required value={editSaleForm.weight} onChange={(e)=>setEditSaleForm({...editSaleForm, weight: Number(e.target.value)})} /></div>
+                              <div>
+                                <Label>Vehicle No</Label>
+                                <Input
+                                  value={editSaleForm.vehicle_no}
+                                  onChange={(e) => setEditSaleForm({ ...editSaleForm, vehicle_no: e.target.value })}
+                                />
+                              </div>
+                              <div>
+                                <Label>Weight (kg)</Label>
+                                <Input
+                                  type="number"
+                                  required
+                                  value={editSaleForm.weight}
+                                  onChange={(e) => setEditSaleForm({ ...editSaleForm, weight: Number(e.target.value) })}
+                                />
+                              </div>
 
-                              <div><Label>Bill Rate (₹/kg)</Label><Input type="number" required value={editSaleForm.bill_rate} onChange={(e)=>setEditSaleForm({...editSaleForm, bill_rate: Number(e.target.value)})} /></div>
-                              <div><Label>Original Rate (₹/kg)</Label><Input type="number" required value={editSaleForm.original_rate} onChange={(e)=>setEditSaleForm({...editSaleForm, original_rate: Number(e.target.value)})} /></div>
+                              <div>
+                                <Label>Bill Rate (₹/kg)</Label>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => changeRateByTenth(setEditSaleForm, editSaleForm, "bill_rate", -0.1)}
+                                  >
+                                    -
+                                  </Button>
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    required
+                                    value={editSaleForm.bill_rate}
+                                    onChange={(e) => setEditSaleForm({ ...editSaleForm, bill_rate: e.target.value })}
+                                    onBlur={(e) => setEditSaleForm({ ...editSaleForm, bill_rate: normalizeRateString(e.target.value) })}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => changeRateByTenth(setEditSaleForm, editSaleForm, "bill_rate", 0.1)}
+                                  >
+                                    +
+                                  </Button>
+                                </div>
+                              </div>
+                              <div>
+                                <Label>Original Rate (₹/kg)</Label>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => changeRateByTenth(setEditSaleForm, editSaleForm, "original_rate", -0.1)}
+                                  >
+                                    -
+                                  </Button>
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    required
+                                    value={editSaleForm.original_rate}
+                                    onChange={(e) => setEditSaleForm({ ...editSaleForm, original_rate: e.target.value })}
+                                    onBlur={(e) =>
+                                      setEditSaleForm({
+                                        ...editSaleForm,
+                                        original_rate: normalizeRateString(e.target.value),
+                                      })
+                                    }
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => changeRateByTenth(setEditSaleForm, editSaleForm, "original_rate", 0.1)}
+                                  >
+                                    +
+                                  </Button>
+                                </div>
+                              </div>
 
-                              <div><Label>GST %</Label><Input type="number" value={editSaleForm.gst_percent} onChange={(e)=>setEditSaleForm({...editSaleForm, gst_percent: Number(e.target.value)})} /></div>
-                              <div><Label>Freight (₹)</Label><Input type="number" value={editSaleForm.freight} onChange={(e)=>setEditSaleForm({...editSaleForm, freight: Number(e.target.value)})} /></div>
+                              <div>
+                                <Label>GST %</Label>
+                                <Input
+                                  type="number"
+                                  value={editSaleForm.gst_percent}
+                                  onChange={(e) => setEditSaleForm({ ...editSaleForm, gst_percent: Number(e.target.value) })}
+                                />
+                              </div>
+                              <div>
+                                <Label>Freight (₹)</Label>
+                                <Input
+                                  type="number"
+                                  value={editSaleForm.freight}
+                                  onChange={(e) => setEditSaleForm({ ...editSaleForm, freight: Number(e.target.value) })}
+                                />
+                              </div>
 
                               <div>
                                 <Label>Freight Payment Status</Label>
-                                <Select value={editSaleForm.freight_payment_status} onValueChange={(v)=>setEditSaleForm({...editSaleForm, freight_payment_status: v})}>
-                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                <Select
+                                  value={editSaleForm.freight_payment_status}
+                                  onValueChange={(v) => setEditSaleForm({ ...editSaleForm, freight_payment_status: v })}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="paid">Paid</SelectItem>
                                     <SelectItem value="pending">Pending</SelectItem>
@@ -920,19 +1246,43 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                               </div>
 
                               <div className="col-span-2 p-3 border rounded bg-gray-50">
-                                <p>Bill Amount: ₹{(editSaleForm.weight * editSaleForm.bill_rate).toLocaleString()}</p>
-                                <p>Original Amount: ₹{(editSaleForm.weight * editSaleForm.original_rate).toLocaleString()}</p>
-                                <p>GST Amount: ₹{(((editSaleForm.weight * editSaleForm.bill_rate) * editSaleForm.gst_percent) / 100).toLocaleString()}</p>
+                                <p>
+                                  Bill Amount: ₹
+                                  {(Number(editSaleForm.weight || 0) * (Number(editSaleForm.bill_rate) || 0)).toLocaleString()}
+                                </p>
+                                <p>
+                                  Original Amount: ₹
+                                  {(Number(editSaleForm.weight || 0) * (Number(editSaleForm.original_rate) || 0)).toLocaleString()}
+                                </p>
+                                <p>
+                                  GST Amount: ₹
+                                  {(
+                                    ((Number(editSaleForm.weight || 0) * (Number(editSaleForm.bill_rate) || 0)) *
+                                      Number(editSaleForm.gst_percent || 0)) /
+                                    100
+                                  ).toLocaleString()}
+                                </p>
                               </div>
 
                               <div className="col-span-2 flex justify-between pt-2">
                                 <div>
-                                  <Button type="button" variant="destructive" onClick={async () => { if (await askConfirm("Delete this sale?")) { await handleDeleteSale(editSaleForm.id); setEditSaleForm(null); } }}>
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    onClick={async () => {
+                                      if (await askConfirm("Delete this sale?")) {
+                                        await handleDeleteSale(editSaleForm.id);
+                                        setEditSaleForm(null);
+                                      }
+                                    }}
+                                  >
                                     Delete
                                   </Button>
                                 </div>
                                 <div className="flex gap-2">
-                                  <Button type="button" variant="outline" onClick={() => setEditSaleForm(null)}>Cancel</Button>
+                                  <Button type="button" variant="outline" onClick={() => setEditSaleForm(null)}>
+                                    Cancel
+                                  </Button>
                                   <Button type="submit">Save</Button>
                                 </div>
                               </div>
@@ -941,18 +1291,10 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                         </DialogContent>
                       </Dialog>
 
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDownloadInvoice(s.id)}
-                      >
+                      <Button size="sm" variant="outline" onClick={() => handleDownloadInvoice(s.id)}>
                         <Download className="w-4 h-4 mr-2" /> Invoice
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteSale(s.id)}
-                      >
+                      <Button size="sm" variant="destructive" onClick={() => handleDeleteSale(s.id)}>
                         <Trash2 className="w-4 h-4 mr-2" /> Delete
                       </Button>
                     </div>

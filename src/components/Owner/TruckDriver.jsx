@@ -15,13 +15,14 @@ import {
   TableRow,
 } from "../ui/table";
 import { Button } from "../ui/button";
-import { Calendar, RefreshCcw } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { Calendar as CalendarComponent } from "../ui/calendar";
 import { toast } from "sonner";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
@@ -29,6 +30,7 @@ const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 export default function TruckDriver() {
   const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const { setRefreshHandler } = usePageRefresh();
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState({
     totalFuel: 0,
@@ -84,6 +86,12 @@ let list = data.trucks.filter((r) => {
     fetchTruckRecords();
   }, [filterDate]);
 
+  useEffect(() => {
+    setRefreshHandler(fetchTruckRecords);
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterDate]);
+
   const handleDateSelect = (date) => {
     if (!date) return;
     setSelectedDate(date);
@@ -121,10 +129,6 @@ let list = data.trucks.filter((r) => {
             </PopoverContent>
           </Popover>
 
-          <Button variant="outline" size="sm" onClick={fetchTruckRecords}>
-            <RefreshCcw className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
         </div>
       </div>
 

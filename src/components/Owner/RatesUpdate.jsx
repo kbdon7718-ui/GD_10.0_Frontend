@@ -43,13 +43,13 @@ import {
   TrendingDown,
   UserPlus,
   Save,
-  RefreshCcw,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatINR } from "../../utils/currencyFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 /**
  * RatesUpdate component
@@ -58,6 +58,7 @@ import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 export default function RatesUpdate() {
   const API = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const { setRefreshHandler } = usePageRefresh();
   // data
   const [materials, setMaterials] = useState([]); // global scrap_types
   const [vendors, setVendors] = useState([]); // vendors with rates
@@ -113,6 +114,12 @@ export default function RatesUpdate() {
       console.error(err);
     }
   };
+
+  useEffect(() => {
+    setRefreshHandler(fetchAll);
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [API]);
 
   useEffect(() => {
     fetchAll();
@@ -360,16 +367,6 @@ export default function RatesUpdate() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={() => fetchAll()}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            aria-label="Refresh rates"
-          >
-            <RefreshCcw className="h-4 w-4" />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
           <Button
             onClick={() => setAddMaterialOpen(true)}
             size="sm"

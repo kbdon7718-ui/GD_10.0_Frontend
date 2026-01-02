@@ -35,13 +35,14 @@ import {
   SelectContent,
   SelectItem,
 } from "../ui/select";
-import { RefreshCcw, Wallet, Plus } from "lucide-react";
+import { Wallet, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { formatINR } from "../../utils/currencyFormat";
 import { OwnerReadOnlyBadge } from "./OwnerBadge";
 import { ResizableHistoryModal } from "./ResizableHistoryModal";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
@@ -49,6 +50,7 @@ const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 export function RokadiUpdate() {
   const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const { setRefreshHandler } = usePageRefresh();
   const [cashAccounts, setCashAccounts] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
   const [totalRokadi, setTotalRokadi] = useState(0);
@@ -105,6 +107,12 @@ const [cashLoading, setCashLoading] = useState(false);
 
   useEffect(() => {
     loadRokadi();
+  }, []);
+
+  useEffect(() => {
+    setRefreshHandler(loadRokadi);
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ================= ADD CASH ================= */
@@ -218,6 +226,9 @@ const exportToCSV = (rows, filename) => {
   window.URL.revokeObjectURL(url);
 };
 
+  const cashTotal = cashAccounts.reduce((s, a) => s + Number(a.balance || 0), 0);
+  const bankTotal = bankAccounts.reduce((s, a) => s + Number(a.balance || 0), 0);
+
   return (
     <div className="space-y-6">
 
@@ -229,10 +240,6 @@ const exportToCSV = (rows, filename) => {
         </div>
         <div className="flex flex-wrap gap-2">
           <OwnerReadOnlyBadge />
-          <Button variant="outline" size="sm" onClick={loadRokadi}>
-            <RefreshCcw className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
         </div>
       </div>
 
@@ -254,10 +261,17 @@ const exportToCSV = (rows, filename) => {
 
       {/* CASH */}
      <Card>
-        <CardHeader className="flex flex-row justify-between items-center">
-          <div>
+        <CardHeader className="flex flex-row justify-between items-start gap-3">
+          <div className="min-w-0">
             <CardTitle>Cash in Hand</CardTitle>
             <CardDescription>Manual credit only</CardDescription>
+          </div>
+
+          <div className="text-right">
+            <div className="text-xs text-gray-500">Total</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {loading ? "…" : formatINR(cashTotal)}
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -449,8 +463,18 @@ const exportToCSV = (rows, filename) => {
 
       {/* BANK */}
       <Card>
-        <CardHeader className="flex flex-row justify-between items-center">
-          <CardTitle>Bank</CardTitle>
+        <CardHeader className="flex flex-row justify-between items-start gap-3">
+          <div className="min-w-0">
+            <CardTitle>Bank</CardTitle>
+            <CardDescription>Bank position</CardDescription>
+          </div>
+
+          <div className="text-right">
+            <div className="text-xs text-gray-500">Total</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {loading ? "…" : formatINR(bankTotal)}
+            </div>
+          </div>
 
           {bankAccounts.length > 0 && (
             <>

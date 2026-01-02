@@ -9,10 +9,12 @@ import {
   Settings,
   LogOut,
   Users,
-  Handshake
+  Handshake,
+  RefreshCcw
 } from "lucide-react";
 
 import { useAuth } from "../../utils/authContext";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 import { ExpenseManager } from "./ExpenseManager";
 import MaalInManager from "./MaalInManager";
 import { LabourManager } from "./LabourManager";
@@ -21,6 +23,7 @@ import { KabadiwalaManager } from "./KabadiwalaManager";
 
 export function ManagerDashboard() {
   const { user, logout } = useAuth();
+  const { refresh, hasHandler } = usePageRefresh();
   const [activeTab, setActiveTab] = useState("expenses");
   const [maalSubTab, setMaalSubTab] = useState("maal-in");
 
@@ -47,12 +50,35 @@ export function ManagerDashboard() {
 
         {/* 🔷 APP HEADER */}
         <div className="sticky top-0 z-40 bg-[#4ADE80] border-b px-4 py-3">
-          <h1 className="text-xl font-bold tracking-wide text-emerald-600">
-            Scrap<span className="text-gray-800">Co</span>
-          </h1>
-          <p className="text-xs text-gray-500">
-            Godown Manager
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-bold tracking-wide text-emerald-600">
+                GT<span className="text-gray-800">C</span>
+              </h1>
+              <p className="text-xs text-gray-500">Powered By ScrapCo.</p>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Refresh"
+                onClick={refresh}
+                disabled={!hasHandler}
+              >
+                <RefreshCcw className="h-5 w-5 text-gray-700" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Settings"
+                onClick={() => setActiveTab("settings")}
+              >
+                <Settings className="h-5 w-5 text-gray-700" />
+              </Button>
+            </div>
+          </div>
         </div>
           
 
@@ -144,16 +170,6 @@ export function ManagerDashboard() {
             >
               <Package className="h-5 w-5" />
               Maal In
-            </button>
-
-            <button
-              onClick={() => setActiveTab("settings")}
-              className={`flex flex-col items-center text-xs ${
-                activeTab === "settings" ? "text-emerald-600" : "text-gray-500"
-              }`}
-            >
-              <Settings className="h-5 w-5" />
-              Settings
             </button>
 
           </div>

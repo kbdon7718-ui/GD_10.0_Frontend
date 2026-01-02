@@ -19,11 +19,13 @@ import { Calendar } from "lucide-react";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 
 export function LabourManager() {
   const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const { setRefreshHandler } = usePageRefresh();
   const company_id = "2f762c5e-5274-4a65-aa66-15a7642a1608";
   const godown_id = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
@@ -83,6 +85,15 @@ export function LabourManager() {
   useEffect(() => {
     fetchLabours();
   }, []);
+
+  useEffect(() => {
+    setRefreshHandler(() => {
+      fetchLabours();
+      fetchAttendanceForDate();
+    });
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   useEffect(() => {
     fetchAttendanceForDate();
@@ -148,18 +159,6 @@ export function LabourManager() {
       className="px-3 py-2 border rounded-md dark:bg-gray-800 text-sm"
     />
 
-    {/* 🔄 REFRESH BUTTON */}
-    <Button
-      size="sm"
-      variant="outline"
-      onClick={() => {
-        fetchLabours();
-        fetchAttendanceForDate();
-        toast.success("Refreshed");
-      }}
-    >
-      <Calendar className="w-4 h-4" />
-    </Button>
   </div>
 </div>
 

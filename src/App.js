@@ -8,6 +8,7 @@ import { ManagerDashboard } from "./components/manager/ManagerDashboard";
 
 import { AuthProvider, useAuth } from "./utils/authContext";
 import { DataProvider } from "./utils/dataContext";
+import { PageRefreshProvider } from "./utils/pageRefreshContext";
 
 function AppContent() {
   const { user, isAuthenticated } = useAuth();
@@ -41,8 +42,10 @@ export default function App() {
   return (
     <AuthProvider>
       <DataProvider>
-        <AppContent />
-        <Toaster />
+        <PageRefreshProvider>
+          <AppContent />
+          <Toaster />
+        </PageRefreshProvider>
       </DataProvider>
     </AuthProvider>
   );

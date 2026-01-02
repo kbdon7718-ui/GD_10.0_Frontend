@@ -25,15 +25,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
-import {
   Plus,
-  RefreshCcw,
   User,
   Truck,
   FileSpreadsheet,
@@ -46,6 +38,7 @@ import { OwnerReadOnlyBadge } from "./OwnerBadge";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { ResizableHistoryModal } from "./ResizableHistoryModal";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 export function LabourSection() {
   const API_URL = getApiBaseUrl();
@@ -53,6 +46,7 @@ export function LabourSection() {
   const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const { setRefreshHandler } = usePageRefresh();
 
   const [activeTab, setActiveTab] = useState("labour");
   const [labours, setLabours] = useState([]);
@@ -73,11 +67,8 @@ export function LabourSection() {
   const [newWorker, setNewWorker] = useState({
     name: "",
     contact: "",
-    role: "",
     worker_type: "Labour",
-    daily_wage: 0,
     monthly_salary: 0,
-    per_kg_rate: 0,
   });
 
   /* ================= FETCH ================= */
@@ -119,11 +110,22 @@ export function LabourSection() {
     if (activeTab === "summary") fetchSalarySummary();
   }, [activeTab, reloadKey]);
 
+  useEffect(() => {
+    const handleRefresh = async () => {
+      await fetchLabours();
+      if (activeTab === "summary") await fetchSalarySummary();
+    };
+
+    setRefreshHandler(handleRefresh);
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, reloadKey]);
+
   /* ================= ADD ================= */
 
   const handleAddWorker = async () => {
-    if (!newWorker.name || !newWorker.contact) {
-      toast.error("Please fill required fields");
+    if (!newWorker.name || Number(newWorker.monthly_salary) <= 0) {
+      toast.error("Please enter Name and Monthly Salary");
       return;
     }
 
@@ -140,19 +142,16 @@ export function LabourSection() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        toast.success("Worker added");
+        toast.success("Labour added");
         setIsAddDialogOpen(false);
         setNewWorker({
           name: "",
           contact: "",
-          role: "",
           worker_type: "Labour",
-          daily_wage: 0,
           monthly_salary: 0,
-          per_kg_rate: 0,
         });
         fetchLabours();
-      } else toast.error(data.error || "Failed to add worker");
+      } else toast.error(data.error || "Failed to add labour");
     } catch {
       toast.error("Connection error");
     }
@@ -300,11 +299,8 @@ export function LabourSection() {
             <OwnerReadOnlyBadge />
           </div>
 
-          <Button onClick={fetchLabours} variant="outline" className="w-full sm:w-auto">
-            <RefreshCcw className="w-4 h-4 mr-1" /> Refresh
-          </Button>
           <Button onClick={() => setIsAddDialogOpen(true)} className="w-full sm:w-auto">
-            <Plus className="w-4 h-4 mr-1" /> Add Worker
+            <Plus className="w-4 h-4 mr-1" /> Add Labour
           </Button>
         </div>
       </div>
@@ -346,17 +342,16 @@ export function LabourSection() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Name</TableHead>
-                        <TableHead>Contact</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead>Daily Wage</TableHead>
                         <TableHead>Monthly Salary</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead className="text-center">History</TableHead>
+                        <TableHead className="text-center">Edit</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {labourWorkers.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                          <TableCell colSpan={5} className="text-center py-8 text-gray-500">
                             No workers
                           </TableCell>
                         </TableRow>
@@ -364,27 +359,17 @@ export function LabourSection() {
                         labourWorkers.map((w) => (
                           <TableRow key={w.id}>
                             <TableCell>{w.name}</TableCell>
-                            <TableCell>{w.contact}</TableCell>
-                            <TableCell>{w.role}</TableCell>
-                            <TableCell>{formatINR(w.daily_wage)}</TableCell>
                             <TableCell>{formatINR(w.monthly_salary)}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => loadLedger(w)}
-                                >
-                                  View History
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openEditWorker(w)}
-                                >
-                                  <Edit className="w-4 h-4 mr-1" /> Edit
-                                </Button>
-                              </div>
+                            <TableCell>{w.contact || "—"}</TableCell>
+                            <TableCell className="text-center">
+                              <Button size="sm" variant="outline" onClick={() => loadLedger(w)}>
+                                History
+                              </Button>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Button size="sm" variant="outline" onClick={() => openEditWorker(w)}>
+                                <Edit className="w-4 h-4 mr-1" /> Edit
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))
@@ -403,7 +388,6 @@ export function LabourSection() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="font-semibold text-gray-900 dark:text-white truncate">{w.name}</p>
-                              <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{w.role || "—"}</p>
                             </div>
                             <div className="shrink-0 flex gap-2">
                               <Button
@@ -425,12 +409,7 @@ export function LabourSection() {
 
                           <div className="grid grid-cols-2 gap-3">
                             <KV label="Contact" value={w.contact} />
-                            <KV label="Daily Wage" value={formatINR(w.daily_wage)} />
-                            <KV
-                              label="Monthly Salary"
-                              value={formatINR(w.monthly_salary)}
-                              className="col-span-2"
-                            />
+                            <KV label="Monthly Salary" value={formatINR(w.monthly_salary)} />
                           </div>
                         </CardContent>
                       </Card>
@@ -612,22 +591,8 @@ export function LabourSection() {
               <Label>Contact</Label>
               <Input value={editingWorker.contact} onChange={(e) => setEditingWorker({ ...editingWorker, contact: e.target.value })} />
 
-              <Label>Role</Label>
-              <Input value={editingWorker.role} onChange={(e) => setEditingWorker({ ...editingWorker, role: e.target.value })} />
-
-              {editingWorker.worker_type === "Labour" ? (
-                <>
-                  <Label>Daily Wage</Label>
-                  <Input type="number" value={editingWorker.daily_wage} onChange={(e) => setEditingWorker({ ...editingWorker, daily_wage: Number(e.target.value) })} />
-                  <Label>Monthly Salary</Label>
-                  <Input type="number" value={editingWorker.monthly_salary} onChange={(e) => setEditingWorker({ ...editingWorker, monthly_salary: Number(e.target.value) })} />
-                </>
-              ) : (
-                <>
-                  <Label>Per Kg Rate</Label>
-                  <Input type="number" value={editingWorker.per_kg_rate} onChange={(e) => setEditingWorker({ ...editingWorker, per_kg_rate: Number(e.target.value) })} />
-                </>
-              )}
+              <Label>Monthly Salary</Label>
+              <Input type="number" value={editingWorker.monthly_salary} onChange={(e) => setEditingWorker({ ...editingWorker, monthly_salary: Number(e.target.value) })} />
             </div>
           )}
 
@@ -644,28 +609,10 @@ export function LabourSection() {
 <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
   <DialogContent className="max-h-[90dvh] overflow-y-auto">
     <DialogHeader>
-      <DialogTitle>Add Worker</DialogTitle>
+      <DialogTitle>Add Labour</DialogTitle>
     </DialogHeader>
 
     <div className="space-y-3">
-      <div>
-        <Label>Worker Type</Label>
-        <Select
-          value={newWorker.worker_type}
-          onValueChange={(val) =>
-            setNewWorker({ ...newWorker, worker_type: val })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Labour">Labour</SelectItem>
-            <SelectItem value="Contractor">Contractor</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <div>
         <Label>Name *</Label>
         <Input
@@ -677,7 +624,21 @@ export function LabourSection() {
       </div>
 
       <div>
-        <Label>Contact *</Label>
+        <Label>Monthly Salary (₹) *</Label>
+        <Input
+          type="number"
+          value={newWorker.monthly_salary}
+          onChange={(e) =>
+            setNewWorker({
+              ...newWorker,
+              monthly_salary: Number(e.target.value),
+            })
+          }
+        />
+      </div>
+
+      <div>
+        <Label>Contact</Label>
         <Input
           value={newWorker.contact}
           onChange={(e) =>
@@ -685,71 +646,13 @@ export function LabourSection() {
           }
         />
       </div>
-
-      <div>
-        <Label>Role</Label>
-        <Input
-          value={newWorker.role}
-          onChange={(e) =>
-            setNewWorker({ ...newWorker, role: e.target.value })
-          }
-        />
-      </div>
-
-      {newWorker.worker_type === "Labour" ? (
-        <>
-          <div>
-            <Label>Daily Wage (₹)</Label>
-            <Input
-              type="number"
-              value={newWorker.daily_wage}
-              onChange={(e) =>
-                setNewWorker({
-                  ...newWorker,
-                  daily_wage: Number(e.target.value),
-                })
-              }
-            />
-          </div>
-
-          <div>
-            <Label>Monthly Salary (₹)</Label>
-            <Input
-              type="number"
-              value={newWorker.monthly_salary}
-              onChange={(e) =>
-                setNewWorker({
-                  ...newWorker,
-                  monthly_salary: Number(e.target.value),
-                })
-              }
-            />
-          </div>
-        </>
-      ) : (
-        <div>
-          <Label>Per Kg Rate (₹)</Label>
-          <Input
-            type="number"
-            value={newWorker.per_kg_rate}
-            onChange={(e) =>
-              setNewWorker({
-                ...newWorker,
-                per_kg_rate: Number(e.target.value),
-              })
-            }
-          />
-        </div>
-      )}
     </div>
 
     <DialogFooter>
       <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
         Cancel
       </Button>
-      <Button onClick={handleAddWorker}>
-        Add Worker
-      </Button>
+      <Button onClick={handleAddWorker}>Add Labour</Button>
     </DialogFooter>
   </DialogContent>
 </Dialog>

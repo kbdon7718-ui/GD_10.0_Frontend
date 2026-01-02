@@ -12,11 +12,13 @@ import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { Plus, Trash2, Save, X, IndianRupee } from "lucide-react";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 
 export function FeriwalaManager() {
   const API_URL = getApiBaseUrl();
-  const [isAdding, setIsAdding] = useState(false);
+  const [activeForm, setActiveForm] = useState("purchase");
+  const { setRefreshHandler } = usePageRefresh();
 
   const [vendors, setVendors] = useState([]);
   const [scrapTypes, setScrapTypes] = useState([]);
@@ -33,6 +35,7 @@ export function FeriwalaManager() {
     date: new Date().toISOString().split("T")[0],
     vendor_id: "",
     amount: "",
+    mode: "cash",
     note: "",
   });
 
@@ -43,6 +46,16 @@ export function FeriwalaManager() {
   useEffect(() => {
     loadVendors();
     loadMaterials();
+  }, []);
+
+  useEffect(() => {
+    setRefreshHandler(() => {
+      loadVendors();
+      loadMaterials();
+    });
+
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ================================
@@ -80,7 +93,17 @@ export function FeriwalaManager() {
       vendor_id: "",
       scraps: [{ material: "", rate: "", weight: "", amount: "" }],
     });
-    setIsAdding(false);
+  };
+
+  const resetWithdrawalForm = () => {
+    setWithdrawForm({
+      date: new Date().toISOString().split("T")[0],
+      vendor_id: "",
+      amount: "",
+      mode: "cash",
+      note: "",
+    });
+    setActiveForm("purchase");
   };
 
   const handleScrapChange = (index, key, value) => {
@@ -177,6 +200,7 @@ export function FeriwalaManager() {
           vendor_id: withdrawForm.vendor_id,
           amount: Number(withdrawForm.amount),
           date: withdrawForm.date,
+          mode: withdrawForm.mode,
           note: withdrawForm.note,
         }),
       });
@@ -185,12 +209,31 @@ export function FeriwalaManager() {
 
       if (data.success) {
         toast.success("Withdrawal recorded!");
-        setWithdrawForm({
-          date: new Date().toISOString().split("T")[0],
-          vendor_id: "",
-          amount: "",
-          note: "",
-        });
+
+        const vendor = vendors.find((v) => v.vendor_id === withdrawForm.vendor_id);
+        try {
+          await fetch(`${API_URL}/api/expenses`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              company_id,
+              godown_id,
+              date: withdrawForm.date,
+              category: "Feriwala",
+              description: withdrawForm.note || "",
+              amount: Number(withdrawForm.amount),
+              payment_mode: withdrawForm.mode === "bank" ? "Bank" : "Cash",
+              paid_to: vendor?.vendor_name || "",
+              labour_id: null,
+              vendor_id: withdrawForm.vendor_id,
+              vendor_type: "feriwala",
+            }),
+          });
+        } catch {
+          toast.error("Withdrawal saved, but expense entry failed");
+        }
+
+        resetWithdrawalForm();
       } else toast.error(data.error);
     } catch (err) {
       toast.error("Server error");
@@ -204,23 +247,23 @@ export function FeriwalaManager() {
   return (
     <div className="space-y-6">
 
-     
-      {/* PURCHASE FORM */}
-      <Card>
-        <CardHeader className="px-4 sm:px-6">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-lg">Add Feriwala Purchase</CardTitle>
-            {!isAdding && (
-              <Button size="sm" onClick={() => setIsAdding(true)}>
-                <Plus className="h-4 w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Add</span>
+      {activeForm === "purchase" ? (
+        <Card>
+          <CardHeader className="px-4 sm:px-6">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-lg">Add Purchase</CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setActiveForm("withdrawal")}
+              >
+                <IndianRupee className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Record Withdrawal</span>
               </Button>
-            )}
-          </div>
-        </CardHeader>
+            </div>
+          </CardHeader>
 
-        <CardContent className="px-4 sm:px-6">
-          {isAdding && (
+          <CardContent className="px-4 sm:px-6">
             <form className="space-y-4" onSubmit={handleSubmit}>
               {/* SELECT FERIWALA */}
               <div>
@@ -296,59 +339,81 @@ export function FeriwalaManager() {
                 </Button>
               </div>
             </form>
-          )}
-        </CardContent>
-      </Card>
-       {/* WITHDRAWAL FORM */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Record Withdrawal</CardTitle>
-          <CardDescription>Feriwala takes money from godown</CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          <form className="space-y-4" onSubmit={submitWithdrawal}>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <select
-                className="border p-2 rounded"
-                value={withdrawForm.vendor_id}
-                required
-                onChange={(e) => handleWithdrawChange("vendor_id", e.target.value)}
-              >
-                <option value="">-- Select Feriwala --</option>
-                {vendors.map((v) => (
-                  <option key={v.vendor_id} value={v.vendor_id}>
-                    {v.vendor_name}
-                  </option>
-                ))}
-              </select>
-
-              <Input
-                type="date"
-                value={withdrawForm.date}
-                onChange={(e) => handleWithdrawChange("date", e.target.value)}
-              />
-
-              <Input
-                type="number"
-                placeholder="Amount"
-                value={withdrawForm.amount}
-                onChange={(e) => handleWithdrawChange("amount", e.target.value)}
-              />
-
-              <Input
-                placeholder="Note (optional)"
-                value={withdrawForm.note}
-                onChange={(e) => handleWithdrawChange("note", e.target.value)}
-              />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Record Withdrawal</CardTitle>
+                <CardDescription>Feriwala takes money from godown</CardDescription>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setActiveForm("purchase")}>
+                <X className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Back</span>
+              </Button>
             </div>
+          </CardHeader>
 
-            <Button type="submit" className="mt-2">
-              <IndianRupee /> &nbsp; Record Withdrawal
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          <CardContent>
+            <form className="space-y-4" onSubmit={submitWithdrawal}>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <select
+                  className="border p-2 rounded"
+                  value={withdrawForm.vendor_id}
+                  required
+                  onChange={(e) => handleWithdrawChange("vendor_id", e.target.value)}
+                >
+                  <option value="">-- Select Feriwala --</option>
+                  {vendors.map((v) => (
+                    <option key={v.vendor_id} value={v.vendor_id}>
+                      {v.vendor_name}
+                    </option>
+                  ))}
+                </select>
+
+                <Input
+                  type="date"
+                  value={withdrawForm.date}
+                  onChange={(e) => handleWithdrawChange("date", e.target.value)}
+                />
+
+                <Input
+                  type="number"
+                  placeholder="Amount"
+                  value={withdrawForm.amount}
+                  onChange={(e) => handleWithdrawChange("amount", e.target.value)}
+                />
+
+                <select
+                  className="border p-2 rounded"
+                  value={withdrawForm.mode}
+                  onChange={(e) => handleWithdrawChange("mode", e.target.value)}
+                >
+                  <option value="cash">Cash</option>
+                  <option value="bank">Bank</option>
+                </select>
+
+                <Input
+                  placeholder="Note (optional)"
+                  value={withdrawForm.note}
+                  onChange={(e) => handleWithdrawChange("note", e.target.value)}
+                />
+              </div>
+
+              <div className="flex gap-2 mt-2">
+                <Button type="submit">
+                  <IndianRupee /> &nbsp; Record Withdrawal
+                </Button>
+                <Button variant="outline" type="button" onClick={resetWithdrawalForm}>
+                  <X /> Back
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
     </div>
   );

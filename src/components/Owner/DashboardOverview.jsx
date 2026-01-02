@@ -38,7 +38,6 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   LogOut,
-  RefreshCcw,
   Truck,
   Users,
   Store,
@@ -46,6 +45,7 @@ import {
 import { formatINR } from "../../utils/currencyFormat";
 import { useAuth } from "../../utils/authContext";
 import { getApiBaseUrl, getApiBaseUrlCandidates, normalizeBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 const COMPANY_ID_DEFAULT = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID_DEFAULT = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
@@ -78,6 +78,7 @@ function MetricCard({ title, icon: Icon, value, items, className }) {
 
 export default function DashboardOverview() {
   const { user, logout } = useAuth();
+  const { setRefreshHandler } = usePageRefresh();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -144,6 +145,12 @@ export default function DashboardOverview() {
 
   useEffect(() => {
     fetchOverview();
+  }, []);
+
+  useEffect(() => {
+    setRefreshHandler(fetchOverview);
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchOverview = async () => {
@@ -234,10 +241,6 @@ export default function DashboardOverview() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={fetchOverview} disabled={loading}>
-            <RefreshCcw className="h-4 w-4 mr-1" />
-            Refresh
-          </Button>
           <Button variant="destructive" size="sm" onClick={logout}>
             <LogOut className="h-4 w-4 mr-1" />
             Logout

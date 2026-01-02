@@ -20,15 +20,17 @@ import { Button } from "../ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { Calendar as CalendarComponent } from "../ui/calendar";
 
-import { Calendar, RefreshCcw } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { formatDate } from "../../utils/dateFormat";
 import { toast } from "sonner";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 export default function MaalIn() {
   const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const { setRefreshHandler } = usePageRefresh();
   const [maalIn, setMaalIn] = useState([]);
   const [summary, setSummary] = useState({
     totalWeight: 0,
@@ -150,12 +152,54 @@ export default function MaalIn() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterDate]);
 
+  useEffect(() => {
+    setRefreshHandler(fetchMaalIn);
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterDate]);
+
   const handleDateSelect = (date) => {
     if (date) {
       setSelectedDate(date);
       setFilterDate(date.toISOString().split("T")[0]);
     }
   };
+
+  const normalize = (val) => String(val ?? "").toLowerCase();
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredMaalIn = maalIn.filter((m) => {
+    if (!normalizedQuery) return true;
+
+    const supplier = normalize(m.supplier);
+    const source = normalize(m.source);
+    const material = normalize(m.material);
+    const date = normalize(m.date);
+
+    if (searchScope === "vendor") return supplier.includes(normalizedQuery);
+    if (searchScope === "type") return source.includes(normalizedQuery);
+    if (searchScope === "date") return date.includes(normalizedQuery);
+    if (searchScope === "material") return material.includes(normalizedQuery);
+
+    return (
+      supplier.includes(normalizedQuery) ||
+      source.includes(normalizedQuery) ||
+      material.includes(normalizedQuery) ||
+      date.includes(normalizedQuery)
+    );
+  });
+
+  const displaySummary = normalizedQuery
+    ? {
+        totalWeight: filteredMaalIn.reduce(
+          (s, i) => s + Number(i.weight || 0),
+          0
+        ),
+        totalAmount: filteredMaalIn.reduce(
+          (s, i) => s + Number(i.amount || 0),
+          0
+        ),
+      }
+    : summary;
 
   return (
     <div className="space-y-6">
@@ -183,36 +227,37 @@ export default function MaalIn() {
                 {formatDate(filterDate)}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
+            <PopoverContent
+              className="w-auto p-2"
+              align={isDesktop ? "end" : "center"}
+              sideOffset={8}
+            >
               <CalendarComponent
                 mode="single"
                 selected={selectedDate}
                 onSelect={handleDateSelect}
+                className="rounded-md"
               />
             </PopoverContent>
           </Popover>
-          <Button variant="outline" size="sm" onClick={fetchMaalIn} className="w-full sm:w-auto">
-            <RefreshCcw className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
         </div>
       </div>
 
       {/* SEARCH BAR */}
       <div className="mt-3">
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
             type="search"
             placeholder="Search vendor / type / date / material..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="border p-2 rounded flex-1"
+            className="h-9 w-full sm:flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
           />
 
           <select
             value={searchScope}
             onChange={(e) => setSearchScope(e.target.value)}
-            className="border p-2 rounded"
+            className="h-9 w-full sm:w-auto rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="all">All</option>
             <option value="vendor">Vendor</option>
@@ -221,7 +266,14 @@ export default function MaalIn() {
             <option value="material">Material</option>
           </select>
 
-          <Button variant="ghost" onClick={() => { setSearchQuery(""); setSearchScope("all"); fetchMaalIn(); }}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setSearchQuery("");
+              setSearchScope("all");
+            }}
+            className="w-full sm:w-auto"
+          >
             Reset
           </Button>
         </div>
@@ -234,7 +286,7 @@ export default function MaalIn() {
             <CardTitle className="text-sm">Total Weight</CardTitle>
           </CardHeader>
           <CardContent className="text-yellow-600 font-semibold">
-            {summary.totalWeight} KG
+              {displaySummary.totalWeight} KG
           </CardContent>
         </Card>
 
@@ -243,7 +295,7 @@ export default function MaalIn() {
             <CardTitle className="text-sm">Total Amount</CardTitle>
           </CardHeader>
           <CardContent className="text-green-600 font-semibold">
-            ₹{summary.totalAmount.toLocaleString()}
+              ₹{Number(displaySummary.totalAmount || 0).toLocaleString()}
           </CardContent>
         </Card>
       </div>
@@ -278,59 +330,14 @@ export default function MaalIn() {
                 </TableHeader>
 
                 <TableBody>
-                  {(
-                    // apply search filtering
-                    maalIn.filter((m) => {
-                      if (!searchQuery) return true;
-                      const q = searchQuery.toLowerCase();
-                      if (searchScope === "all") {
-                        return (
-                          String(m.supplier || "").toLowerCase().includes(q) ||
-                          String(m.source || "").toLowerCase().includes(q) ||
-                          String(m.material || "").toLowerCase().includes(q) ||
-                          String(m.date || "").toLowerCase().includes(q)
-                        );
-                      }
-                      if (searchScope === "vendor")
-                        return String(m.supplier || "").toLowerCase().includes(q);
-                      if (searchScope === "type")
-                        return String(m.source || "").toLowerCase().includes(q);
-                      if (searchScope === "date")
-                        return String(m.date || "").toLowerCase().includes(q);
-                      if (searchScope === "material")
-                        return String(m.material || "").toLowerCase().includes(q);
-                      return true;
-                    })
-                  ).length === 0 ? (
+                  {filteredMaalIn.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-6">
                         No records found
                       </TableCell>
                     </TableRow>
                   ) : (
-                    maalIn
-                      .filter((m) => {
-                        if (!searchQuery) return true;
-                        const q = searchQuery.toLowerCase();
-                        if (searchScope === "all") {
-                          return (
-                            String(m.supplier || "").toLowerCase().includes(q) ||
-                            String(m.source || "").toLowerCase().includes(q) ||
-                            String(m.material || "").toLowerCase().includes(q) ||
-                            String(m.date || "").toLowerCase().includes(q)
-                          );
-                        }
-                        if (searchScope === "vendor")
-                          return String(m.supplier || "").toLowerCase().includes(q);
-                        if (searchScope === "type")
-                          return String(m.source || "").toLowerCase().includes(q);
-                        if (searchScope === "date")
-                          return String(m.date || "").toLowerCase().includes(q);
-                        if (searchScope === "material")
-                          return String(m.material || "").toLowerCase().includes(q);
-                        return true;
-                      })
-                      .map((m) => (
+                    filteredMaalIn.map((m) => (
                         <TableRow key={m.id}>
                           <TableCell>{formatDate(m.date)}</TableCell>
                           <TableCell>{m.material}</TableCell>
@@ -347,10 +354,10 @@ export default function MaalIn() {
             </div>
           ) : (
             <div className="space-y-3">
-              {maalIn.length === 0 ? (
+              {filteredMaalIn.length === 0 ? (
                 <p className="text-sm text-gray-500 py-6 text-center">No records found</p>
               ) : (
-                maalIn.map((m) => (
+                filteredMaalIn.map((m) => (
                   <Card key={m.id} className="w-full">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">

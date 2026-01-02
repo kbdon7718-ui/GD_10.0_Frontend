@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -12,6 +13,13 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+
+  const watermark = (
+    <div className="pointer-events-none fixed bottom-3 right-3 z-50 text-[10px] text-gray-500 dark:text-gray-400">
+      powered by <span className="text-green-600 dark:text-green-400">Scrap</span>
+      <span className="text-black dark:text-black">Co.</span>
+    </div>
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,14 +50,22 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-100 dark:from-gray-900 dark:to-gray-800 p-4">
-      <div className="w-full max-w-md">
+    <>
+      <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-100 dark:from-gray-900 dark:to-gray-800 p-4">
+        <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
             <Building2 className="h-12 w-12 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <h1 className="text-emerald-600 dark:text-emerald-400 mb-2">ScrapCo</h1>
-          <p className="text-gray-600 dark:text-gray-400">Godown Management System</p>
+          <div className="mb-2 flex flex-col items-center">
+            <h1 className="text-2xl font-semibold leading-tight">
+              <span className="text-green-600 dark:text-green-400">G</span>
+              <span className="text-green-600 dark:text-green-400">T</span>
+              <span className="text-black">C</span>
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-300">ScrapCo</p>
+          </div>
+          <p className="text-gray-600 dark:text-gray-300">Login to continue</p>
         </div>
 
         <Card>
@@ -136,6 +152,10 @@ export function Login() {
           </CardContent>
         </Card>
       </div>
-    </div>
+
+      </div>
+
+      {typeof document !== 'undefined' ? createPortal(watermark, document.body) : null}
+    </>
   );
 }

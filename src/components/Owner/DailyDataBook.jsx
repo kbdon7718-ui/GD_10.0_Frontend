@@ -32,7 +32,6 @@ import { Label } from "../ui/label";
 import {
   Calendar,
   Download,
-  RefreshCcw,
   ChevronLeft,
   ChevronRight,
   Edit,
@@ -42,8 +41,10 @@ import { formatDate, getTodayISO } from "../../utils/dateFormat";
 import { toast } from "sonner";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 export function DailyDataBook() {
+  const { setRefreshHandler } = usePageRefresh();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const todayISO = getTodayISO();
 
@@ -97,6 +98,7 @@ export function DailyDataBook() {
     // Keeping only [filterDate] avoids extra re-renders/refetch cycles.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterDate]);
+
 
   /* ================= DATE NAV ================= */
 
@@ -176,7 +178,6 @@ export function DailyDataBook() {
       "Paid To",
       "Mode",
       "Amount",
-      "Entered By",
       "Date"
     ];
     // Prepare CSV rows
@@ -186,7 +187,6 @@ export function DailyDataBook() {
       e.paid_to,
       e.payment_mode,
       e.amount,
-      e.created_by_name || "Manager",
       e.date ? formatDate(e.date) : ""
     ]);
     // Combine header and rows
@@ -213,7 +213,14 @@ export function DailyDataBook() {
     toast.success("Data refreshed");
   };
 
+  useEffect(() => {
+    setRefreshHandler(handleRefresh);
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterDate]);
+
   /* ================= UI ================= */
+
 
   return (
     <div className="space-y-6">
@@ -245,11 +252,6 @@ export function DailyDataBook() {
               />
             </PopoverContent>
           </Popover>
-
-          <Button onClick={handleRefresh} variant="outline" size="sm">
-            <RefreshCcw className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
 
           <Button className="bg-green-600" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4 sm:mr-2" />
@@ -307,7 +309,6 @@ export function DailyDataBook() {
                           <TableHead>Paid To</TableHead>
                           <TableHead>Mode</TableHead>
                           <TableHead>Amount</TableHead>
-                          <TableHead>Entered By</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -322,7 +323,6 @@ export function DailyDataBook() {
                             <TableCell className="text-red-600 font-semibold">
                               ₹{Number(e.amount).toLocaleString()}
                             </TableCell>
-                            <TableCell>{e.created_by_name || "Manager"}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex gap-2 justify-end">
                                 <Button
@@ -378,12 +378,6 @@ export function DailyDataBook() {
                                 <div className="text-xs text-gray-500">Paid To</div>
                                 <div className="font-medium break-words">
                                   {e.paid_to || "—"}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500">Entered By</div>
-                                <div className="font-medium">
-                                  {e.created_by_name || "Manager"}
                                 </div>
                               </div>
                             </div>

@@ -16,12 +16,13 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { RefreshCcw, FileDown } from "lucide-react";
+import { FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { ResizableHistoryModal } from "./ResizableHistoryModal";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 /* ================= CONFIG ================= */
 const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
@@ -32,6 +33,7 @@ const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
 export function KabadiwalaSection() {
   const API_URL = getApiBaseUrl();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const { setRefreshHandler } = usePageRefresh();
   const [balances, setBalances] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -69,37 +71,17 @@ export function KabadiwalaSection() {
       setActiveVendor(vendor);
 
       const res = await fetch(
-        `${API_URL}/api/kabadiwala/owner-list?company_id=${COMPANY_ID}&godown_id=${GODOWN_ID}`
+        `${API_URL}/api/kabadiwala/ledger?company_id=${COMPANY_ID}&godown_id=${GODOWN_ID}&vendor_id=${vendor.vendor_id}`
       );
 
       const data = await res.json();
-      if (!data.success) {
-        toast.error("Failed to load ledger");
-        return;
+
+      if (data.success) {
+        setLedger(data.ledger || []);
+        setOutstanding(data.outstanding || 0);
+      } else {
+        toast.error(data.error || "Failed to load ledger");
       }
-
-      const rows = data.entries.filter(
-        (e) => e.kabadi_name === vendor.vendor_name
-      );
-
-      let running = 0;
-
-      const ledgerRows = rows.map((r) => {
-        // PURCHASE → kabadiwala owes → +
-        const amt = Number(r.amount);
-        running += amt;
-
-        return {
-          date: r.date,
-          type: "Purchase",
-          description: `${r.material} (${r.weight}kg × ₹${r.rate})`,
-          amount: amt,
-          balance: running,
-        };
-      });
-
-      setLedger(ledgerRows);
-      setOutstanding(running);
     } catch {
       toast.error("Server error");
     } finally {
@@ -109,6 +91,12 @@ export function KabadiwalaSection() {
 
   useEffect(() => {
     loadBalances();
+  }, []);
+
+  useEffect(() => {
+    setRefreshHandler(loadBalances);
+    return () => setRefreshHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ================= SEARCH ================= */
@@ -157,9 +145,6 @@ export function KabadiwalaSection() {
           </p>
         </div>
 
-        <Button variant="outline" size="sm" onClick={loadBalances} className="w-fit">
-          <RefreshCcw className="w-4 h-4 mr-2" /> Refresh
-        </Button>
       </div>
 
       {/* SEARCH */}
@@ -186,9 +171,9 @@ export function KabadiwalaSection() {
                 <p
                   className={`text-2xl font-bold ${
                     v.balance > 0
-                      ? "text-red-600"
-                      : v.balance < 0
                       ? "text-green-600"
+                      : v.balance < 0
+                      ? "text-red-600"
                       : ""
                   }`}
                 >
@@ -250,7 +235,9 @@ export function KabadiwalaSection() {
                 {ledger.map((l, i) => (
                   <TableRow key={i}>
                     <TableCell>{formatDate(l.date)}</TableCell>
-                    <TableCell>{l.type}</TableCell>
+                    <TableCell>
+                      {l.type === "purchase" ? "Maal" : "Payment"}
+                    </TableCell>
                     <TableCell>
                       <pre className="whitespace-pre-wrap text-sm">
                         {l.description}
@@ -277,7 +264,7 @@ export function KabadiwalaSection() {
                           {formatDate(l.date)}
                         </CardTitle>
                         <CardDescription className="text-sm">
-                          {l.type}
+                          {l.type === "purchase" ? "Maal" : "Payment"}
                         </CardDescription>
                       </div>
                       <div className="text-right">

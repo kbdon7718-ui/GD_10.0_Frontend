@@ -31,16 +31,22 @@ import { useMediaQuery } from "../../utils/useMediaQuery";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 const EXPENSE_CATEGORIES = [
-  "Miscellaneous",
-  "Electricity Bill",
-  "Water Bill",
+  "Godam",
   "Maintenance",
-  "Fuel",
   "Labour",
   "Feriwala",
   "Kabadiwala",
   "Partner",
 ];
+
+const normalizePaymentMode = (mode) => {
+  if (!mode) return "Cash";
+  if (mode === "UPI" || mode === "Bank Transfer") return "Bank";
+  if (mode === "cash") return "Cash";
+  if (mode === "bank") return "Bank";
+  if (mode === "Cash" || mode === "Bank") return mode;
+  return "Cash";
+};
 
 export function ExpenseManager() {
   const isDesktop = useMediaQuery("(min-width: 768px)");
@@ -54,7 +60,7 @@ export function ExpenseManager() {
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split("T")[0],
-    category: "Miscellaneous",
+    category: "Godam",
     description: "",
     amount: "",
     transactionMode: "Cash",
@@ -130,7 +136,7 @@ export function ExpenseManager() {
   const resetForm = () => {
     setFormData({
       date: new Date().toISOString().split("T")[0],
-      category: "Miscellaneous",
+      category: "Godam",
       description: "",
       amount: "",
       transactionMode: "Cash",
@@ -153,9 +159,9 @@ export function ExpenseManager() {
         godown_id: GODOWN_ID,
         date: formData.date,
         category: formData.category,
-        description: formData.description,
+        description: formData.description || "",
         amount: Number(formData.amount),
-        payment_mode: formData.transactionMode,
+        payment_mode: normalizePaymentMode(formData.transactionMode),
         paid_to: "",
         labour_id: null,
         vendor_id: null,
@@ -179,7 +185,7 @@ export function ExpenseManager() {
             labour_id: formData.labour_id,
             date: formData.date,
             amount: Number(formData.amount),
-            mode: formData.transactionMode,
+            mode: normalizePaymentMode(formData.transactionMode),
           }),
         });
         // Optionally check withdrawalRes.ok and show error if needed
@@ -324,7 +330,6 @@ export function ExpenseManager() {
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
-                    required
                   />
                 </div>
 
@@ -358,10 +363,7 @@ export function ExpenseManager() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Cash">Cash</SelectItem>
-                      <SelectItem value="UPI">UPI</SelectItem>
-                      <SelectItem value="Bank Transfer">
-                        Bank Transfer
-                      </SelectItem>
+                      <SelectItem value="Bank">Bank</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

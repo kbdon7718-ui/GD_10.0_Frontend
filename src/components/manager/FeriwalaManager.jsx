@@ -178,7 +178,7 @@ export function FeriwalaManager() {
     WITHDRAWAL FORM HANDLERS
   ================================ */
 
-  const handleWithdrawChange = (key, value) => {
+    const handleWithdrawChange = (key, value) => {
     setWithdrawForm({ ...withdrawForm, [key]: value });
   };
 
@@ -191,17 +191,22 @@ export function FeriwalaManager() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/api/feriwala/withdrawal`, {
+      const vendor = vendors.find((v) => v.vendor_id === withdrawForm.vendor_id);
+
+      const res = await fetch(`${API_URL}/api/expenses`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company_id,
           godown_id,
-          vendor_id: withdrawForm.vendor_id,
-          amount: Number(withdrawForm.amount),
           date: withdrawForm.date,
-          mode: withdrawForm.mode,
-          note: withdrawForm.note,
+          category: "Feriwala",
+          description: withdrawForm.note || "",
+          amount: Number(withdrawForm.amount),
+          payment_mode: withdrawForm.mode === "bank" ? "Bank" : "Cash",
+          paid_to: vendor?.vendor_name || "",
+          labour_id: null,
+          vendor_id: withdrawForm.vendor_id,
         }),
       });
 
@@ -209,30 +214,6 @@ export function FeriwalaManager() {
 
       if (data.success) {
         toast.success("Withdrawal recorded!");
-
-        const vendor = vendors.find((v) => v.vendor_id === withdrawForm.vendor_id);
-        try {
-          await fetch(`${API_URL}/api/expenses`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              company_id,
-              godown_id,
-              date: withdrawForm.date,
-              category: "Feriwala",
-              description: withdrawForm.note || "",
-              amount: Number(withdrawForm.amount),
-              payment_mode: withdrawForm.mode === "bank" ? "Bank" : "Cash",
-              paid_to: vendor?.vendor_name || "",
-              labour_id: null,
-              vendor_id: withdrawForm.vendor_id,
-              vendor_type: "feriwala",
-            }),
-          });
-        } catch {
-          toast.error("Withdrawal saved, but expense entry failed");
-        }
-
         resetWithdrawalForm();
       } else toast.error(data.error);
     } catch (err) {

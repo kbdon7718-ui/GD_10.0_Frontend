@@ -206,12 +206,12 @@ export default function MaalIn() {
       {/* HEADER */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          {/*   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Maal In Records
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+        } <p className="text-sm text-gray-500 dark:text-gray-400">
             Read-only view of all Maal In entries
-          </p>
+          </p>*/}
         </div>
 
         {/*

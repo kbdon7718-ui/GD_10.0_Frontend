@@ -286,12 +286,12 @@ export function LabourSection() {
       */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-gray-900 dark:text-white mb-1">
+         {/* <h2 className="text-gray-900 dark:text-white mb-1">
             Labour & Contractor Register
           </h2>
           <p className="text-gray-500 dark:text-gray-400">
             Notebook-style labour records
-          </p>
+          </p>*/}
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">

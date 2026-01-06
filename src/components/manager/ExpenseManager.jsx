@@ -250,7 +250,7 @@ export function ExpenseManager() {
             <div>
               <CardTitle className="text-lg">Daily Kharch </CardTitle>
               <CardDescription className="text-sm">
-                Record daily expenses
+                
               </CardDescription>
             </div>
 

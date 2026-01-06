@@ -22,7 +22,7 @@ import { FeriwalaManager } from "./FeriwalaManager";
 import { KabadiwalaManager } from "./KabadiwalaManager";
 
 export function ManagerDashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, setRole } = useAuth();
   const { refresh, hasHandler } = usePageRefresh();
   const [activeTab, setActiveTab] = useState("expenses");
   const [maalSubTab, setMaalSubTab] = useState("maal-in");
@@ -59,6 +59,15 @@ export function ManagerDashboard() {
             </div>
 
             <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="mr-2"
+                onClick={() => setRole("owner")}
+              >
+                Switch to Owner
+              </Button>
+
               <Button
                 variant="ghost"
                 size="icon"

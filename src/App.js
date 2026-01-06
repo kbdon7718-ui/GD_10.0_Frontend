@@ -1,23 +1,38 @@
 // App.js
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Toaster } from "./components/ui/sonner";
 
-import { Login } from "./components/Owner/Login";
 import { OwnersDashboard } from "./components/Owner/OwnersDashboard";
 import { ManagerDashboard } from "./components/manager/ManagerDashboard";
+import { Welcome } from "./components/Owner/Welcome";
 
 import { AuthProvider, useAuth } from "./utils/authContext";
 import { DataProvider } from "./utils/dataContext";
 import { PageRefreshProvider } from "./utils/pageRefreshContext";
 
 function AppContent() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, setRole } = useAuth();
+
+  const [hasSeenWelcome, setHasSeenWelcome] = useState(true);
+
+  useEffect(() => {
+    const seen = localStorage.getItem("scrapco_seen_welcome");
+    setHasSeenWelcome(!!seen);
+  }, []);
 
   // 🔑 Owner section state (SINGLE SOURCE OF TRUTH)
   const [activeSection, setActiveSection] = useState("dashboard");
 
-  if (!isAuthenticated) {
-    return <Login />;
+  if (!hasSeenWelcome) {
+    return (
+      <Welcome
+        onContinue={() => {
+          localStorage.setItem("scrapco_seen_welcome", "1");
+          setRole("owner");
+          setHasSeenWelcome(true);
+        }}
+      />
+    );
   }
 
   // 👇 ROLE BASED ROUTING

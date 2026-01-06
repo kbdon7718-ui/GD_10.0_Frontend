@@ -2,65 +2,50 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(undefined);
 
-// Mock users for demo - In production, this would be in a database
-const MOCK_USERS = [
-  {
+const USERS_BY_ROLE = {
+  owner: {
     id: '1',
     name: 'Rajesh Kumar',
     email: 'owner@scrapco.com',
-    password: 'owner123',
     role: 'owner',
   },
-  {
+  manager: {
     id: '2',
     name: 'Amit Sharma',
     email: 'manager@scrapco.com',
-    password: 'manager123',
     role: 'manager',
   },
-];
+};
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(USERS_BY_ROLE.owner);
 
-  // Check for existing session on mount
+  // Load role on mount (default owner)
   useEffect(() => {
-    const storedUser = localStorage.getItem('scrapco_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    const storedRole = localStorage.getItem('scrapco_role');
+    const role = storedRole === 'manager' ? 'manager' : 'owner';
+    setUser(USERS_BY_ROLE[role]);
   }, []);
 
-  const login = async (email, password) => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const foundUser = MOCK_USERS.find(
-      (u) => u.email === email && u.password === password
-    );
-
-    if (foundUser) {
-      const { password: _, ...userWithoutPassword } = foundUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem('scrapco_user', JSON.stringify(userWithoutPassword));
-      return true;
-    }
-
-    return false;
+  const setRole = (role) => {
+    const normalized = role === 'manager' ? 'manager' : 'owner';
+    localStorage.setItem('scrapco_role', normalized);
+    setUser(USERS_BY_ROLE[normalized]);
   };
 
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem('scrapco_user');
+    localStorage.removeItem('scrapco_role');
+    localStorage.removeItem('scrapco_seen_welcome');
+    setUser(USERS_BY_ROLE.owner);
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        login,
         logout,
-        isAuthenticated: !!user,
+        setRole,
+        isAuthenticated: true,
       }}
     >
       {children}

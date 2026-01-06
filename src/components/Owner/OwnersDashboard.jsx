@@ -49,7 +49,7 @@ function NavBtn({ active, onClick, icon, label, highlight }) {
 }
 
 export function OwnersDashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, setRole } = useAuth();
   const { refresh, hasHandler } = usePageRefresh();
 
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -73,6 +73,15 @@ export function OwnersDashboard() {
           </div>
 
           <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="mr-2"
+              onClick={() => setRole("manager")}
+            >
+              Switch to Manager
+            </Button>
+
             <Button
               size="icon"
               variant="ghost"

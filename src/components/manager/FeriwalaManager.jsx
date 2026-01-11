@@ -12,8 +12,8 @@ import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { Plus, Trash2, Save, X, IndianRupee } from "lucide-react";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { useSubmitOnce } from "../../utils/useSubmitOnce";
 import { usePageRefresh } from "../../utils/pageRefreshContext";
-
 
 export function FeriwalaManager() {
   const API_URL = getApiBaseUrl();
@@ -27,7 +27,17 @@ export function FeriwalaManager() {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split("T")[0],
     vendor_id: "",
-    scraps: [{ material: "", rate: "", weight: "", amount: "" }],
+    scraps: [
+      {
+        material: "",
+        rate: "",
+        weight: "",
+        amount: "",
+        isNew: false,
+        material_name: "",
+        rateEdited: false,
+      },
+    ],
   });
 
   // WITHDRAWAL FORM
@@ -66,8 +76,7 @@ export function FeriwalaManager() {
     try {
       const res = await fetch(`${API_URL}/api/rates/vendors-with-rates`);
       const data = await res.json();
-      if (data.success)
-        setVendors(data.vendors.filter((v) => v.type === "feriwala"));
+      if (data.success) setVendors(data.vendors.filter((v) => v.type === "feriwala"));
     } catch (err) {
       toast.error("Failed to load vendors");
     }
@@ -91,7 +100,38 @@ export function FeriwalaManager() {
     setFormData({
       date: new Date().toISOString().split("T")[0],
       vendor_id: "",
-      scraps: [{ material: "", rate: "", weight: "", amount: "" }],
+      scraps: [
+        {
+          material: "",
+          rate: "",
+          weight: "",
+          amount: "",
+          isNew: false,
+          material_name: "",
+          rateEdited: false,
+        },
+      ],
+    });
+  };
+
+  const onVendorChange = (vendor_id) => {
+    const vendor = vendors.find((v) => v.vendor_id === vendor_id);
+
+    setFormData((prev) => {
+      const scraps = prev.scraps.map((row) => {
+        if (row.isNew) return row;
+        if (!row.material) return row;
+        if (row.rateEdited) return row;
+        if (!vendor) return row;
+
+        const rateEntry = vendor.rates.find((r) => r.scrap_type_id === row.material);
+        const rate = rateEntry ? rateEntry.vendor_rate : 0;
+        const weight = parseFloat(row.weight || 0);
+        const amount = weight * parseFloat(rate || 0);
+        return { ...row, rate, amount };
+      });
+
+      return { ...prev, vendor_id, scraps };
     });
   };
 
@@ -108,17 +148,34 @@ export function FeriwalaManager() {
 
   const handleScrapChange = (index, key, value) => {
     const updated = [...formData.scraps];
-    updated[index][key] = value;
 
     if (key === "material") {
-      const vendor = vendors.find((v) => v.vendor_id === formData.vendor_id);
-      if (vendor) {
-        const rateEntry = vendor.rates.find((r) => r.scrap_type_id === value);
-        updated[index].rate = rateEntry ? rateEntry.vendor_rate : 0;
+      if (value === "__new__") {
+        updated[index].material = "";
+        updated[index].isNew = true;
+        updated[index].material_name = "";
+        updated[index].rate = "";
+        updated[index].rateEdited = false;
+      } else {
+        updated[index].material = value;
+        updated[index].isNew = false;
+        updated[index].material_name = "";
+        updated[index].rateEdited = false;
+
+        const vendor = vendors.find((v) => v.vendor_id === formData.vendor_id);
+        if (vendor) {
+          const rateEntry = vendor.rates.find((r) => r.scrap_type_id === value);
+          updated[index].rate = rateEntry ? rateEntry.vendor_rate : 0;
+        }
+      }
+    } else {
+      updated[index][key] = value;
+      if (key === "rate") {
+        updated[index].rateEdited = String(value).trim() !== "";
       }
     }
 
-    if (key === "weight" || key === "rate") {
+    if (key === "weight" || key === "rate" || key === "material") {
       const weight = parseFloat(updated[index].weight || 0);
       const rate = parseFloat(updated[index].rate || 0);
       updated[index].amount = weight * rate;
@@ -130,7 +187,18 @@ export function FeriwalaManager() {
   const addScrapRow = () => {
     setFormData({
       ...formData,
-      scraps: [...formData.scraps, { material: "", rate: "", weight: "", amount: "" }],
+      scraps: [
+        ...formData.scraps,
+        {
+          material: "",
+          rate: "",
+          weight: "",
+          amount: "",
+          isNew: false,
+          material_name: "",
+          rateEdited: false,
+        },
+      ],
     });
   };
 
@@ -143,8 +211,28 @@ export function FeriwalaManager() {
     SUBMIT PURCHASE
   ================================ */
 
-  const handleSubmit = async (e) => {
+  const [isSubmitting, wrap] = useSubmitOnce();
+
+  const handleSubmit = wrap(async (e) => {
     e.preventDefault();
+
+    if (!formData.vendor_id) {
+      toast.error("Select feriwala");
+      return;
+    }
+
+    const invalidRow = formData.scraps.some((s) => {
+      const hasWeight = String(s.weight || "").trim() !== "";
+      const hasExistingMaterial = !s.isNew && String(s.material || "").trim() !== "";
+      const hasNewMaterialName = s.isNew && String(s.material_name || "").trim() !== "";
+      const hasRateForNew = !s.isNew || String(s.rate || "").trim() !== "";
+      return !hasWeight || (!hasExistingMaterial && !hasNewMaterialName) || !hasRateForNew;
+    });
+
+    if (invalidRow) {
+      toast.error("Fill all scrap rows");
+      return;
+    }
 
     try {
       const res = await fetch(`${API_URL}/api/feriwala/add`, {
@@ -155,12 +243,12 @@ export function FeriwalaManager() {
           godown_id,
           vendor_id: formData.vendor_id,
           scraps: formData.scraps.map((s) => ({
-            scrap_type_id: s.material,
+            scrap_type_id: s.isNew ? undefined : s.material,
+            material: s.isNew ? s.material_name : undefined,
             weight: Number(s.weight),
+            rate: s.rate !== undefined && s.rate !== null && s.rate !== "" ? Number(s.rate) : undefined,
           })),
           account_id,
-         
-
         }),
       });
 
@@ -172,17 +260,17 @@ export function FeriwalaManager() {
     } catch (err) {
       toast.error("Server error");
     }
-  };
+  });
 
   /* ================================
     WITHDRAWAL FORM HANDLERS
   ================================ */
 
-    const handleWithdrawChange = (key, value) => {
+  const handleWithdrawChange = (key, value) => {
     setWithdrawForm({ ...withdrawForm, [key]: value });
   };
 
-  const submitWithdrawal = async (e) => {
+  const submitWithdrawal = wrap(async (e) => {
     e.preventDefault();
 
     if (!withdrawForm.vendor_id || !withdrawForm.amount) {
@@ -191,22 +279,17 @@ export function FeriwalaManager() {
     }
 
     try {
-      const vendor = vendors.find((v) => v.vendor_id === withdrawForm.vendor_id);
-
-      const res = await fetch(`${API_URL}/api/expenses`, {
+      const res = await fetch(`${API_URL}/api/feriwala/withdrawal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company_id,
           godown_id,
-          date: withdrawForm.date,
-          category: "Feriwala",
-          description: withdrawForm.note || "",
-          amount: Number(withdrawForm.amount),
-          payment_mode: withdrawForm.mode === "bank" ? "Bank" : "Cash",
-          paid_to: vendor?.vendor_name || "",
-          labour_id: null,
           vendor_id: withdrawForm.vendor_id,
+          amount: Number(withdrawForm.amount),
+          date: withdrawForm.date,
+          mode: withdrawForm.mode,
+          note: withdrawForm.note,
         }),
       });
 
@@ -214,12 +297,36 @@ export function FeriwalaManager() {
 
       if (data.success) {
         toast.success("Withdrawal recorded!");
+
+        const vendor = vendors.find((v) => v.vendor_id === withdrawForm.vendor_id);
+        try {
+          await fetch(`${API_URL}/api/expenses`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              company_id,
+              godown_id,
+              date: withdrawForm.date,
+              category: "Feriwala",
+              description: withdrawForm.note || "",
+              amount: Number(withdrawForm.amount),
+              payment_mode: withdrawForm.mode === "bank" ? "Bank" : "Cash",
+              paid_to: vendor?.vendor_name || "",
+              labour_id: null,
+              vendor_id: withdrawForm.vendor_id,
+              vendor_type: "feriwala",
+            }),
+          });
+        } catch {
+          toast.error("Withdrawal saved, but expense entry failed");
+        }
+
         resetWithdrawalForm();
       } else toast.error(data.error);
     } catch (err) {
       toast.error("Server error");
     }
-  };
+  });
 
   /* ================================
       RETURN UI
@@ -227,7 +334,6 @@ export function FeriwalaManager() {
 
   return (
     <div className="space-y-6">
-
       {activeForm === "purchase" ? (
         <Card>
           <CardHeader className="px-4 sm:px-6">
@@ -253,9 +359,7 @@ export function FeriwalaManager() {
                   className="border p-2 rounded w-full"
                   value={formData.vendor_id}
                   required
-                  onChange={(e) =>
-                    setFormData({ ...formData, vendor_id: e.target.value })
-                  }
+                  onChange={(e) => onVendorChange(e.target.value)}
                 >
                   <option value="">-- Select Feriwala --</option>
                   {vendors.map((v) => (
@@ -269,22 +373,39 @@ export function FeriwalaManager() {
               {/* SCRAPS */}
               <Label>Scrap Items</Label>
               {formData.scraps.map((row, i) => (
-                <div key={i} className="grid grid-cols-5 gap-2 items-center">
-                  <select
-                    className="border p-2 rounded"
-                    value={row.material}
-                    required
-                    onChange={(e) =>
-                      handleScrapChange(i, "material", e.target.value)
-                    }
-                  >
-                    <option value="">Material</option>
-                    {scrapTypes.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.material_type}
-                      </option>
-                    ))}
-                  </select>
+                <div
+                  key={i}
+                  className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center"
+                >
+                  <div className="space-y-1">
+                    <select
+                      className="border p-2 rounded w-full"
+                      value={row.isNew ? "__new__" : row.material}
+                      required
+                      onChange={(e) =>
+                        handleScrapChange(i, "material", e.target.value)
+                      }
+                    >
+                      <option value="">Material</option>
+                      <option value="__new__">+ Add new item</option>
+                      {scrapTypes.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.material_type}
+                        </option>
+                      ))}
+                    </select>
+
+                    {row.isNew && (
+                      <Input
+                        type="text"
+                        placeholder="New item name"
+                        value={row.material_name}
+                        onChange={(e) =>
+                          handleScrapChange(i, "material_name", e.target.value)
+                        }
+                      />
+                    )}
+                  </div>
 
                   <Input
                     type="number"
@@ -295,7 +416,12 @@ export function FeriwalaManager() {
                     }
                   />
 
-                  <Input type="number" value={row.rate} readOnly />
+                  <Input
+                    type="number"
+                    placeholder="Rate"
+                    value={row.rate}
+                    onChange={(e) => handleScrapChange(i, "rate", e.target.value)}
+                  />
 
                   <Input type="number" value={row.amount} readOnly />
 
@@ -312,8 +438,8 @@ export function FeriwalaManager() {
               </Button>
 
               <div className="flex gap-2 mt-4">
-                <Button type="submit">
-                  <Save /> Save Purchase
+                <Button type="submit" disabled={isSubmitting}>
+                  <Save /> {isSubmitting ? "Saving..." : "Save Purchase"}
                 </Button>
                 <Button variant="outline" type="button" onClick={resetForm}>
                   <X /> Cancel
@@ -330,7 +456,11 @@ export function FeriwalaManager() {
                 <CardTitle>Record Withdrawal</CardTitle>
                 <CardDescription>Feriwala takes money from godown</CardDescription>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setActiveForm("purchase")}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setActiveForm("purchase")}
+              >
                 <X className="h-4 w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Back</span>
               </Button>
@@ -344,7 +474,9 @@ export function FeriwalaManager() {
                   className="border p-2 rounded"
                   value={withdrawForm.vendor_id}
                   required
-                  onChange={(e) => handleWithdrawChange("vendor_id", e.target.value)}
+                  onChange={(e) =>
+                    handleWithdrawChange("vendor_id", e.target.value)
+                  }
                 >
                   <option value="">-- Select Feriwala --</option>
                   {vendors.map((v) => (
@@ -364,7 +496,9 @@ export function FeriwalaManager() {
                   type="number"
                   placeholder="Amount"
                   value={withdrawForm.amount}
-                  onChange={(e) => handleWithdrawChange("amount", e.target.value)}
+                  onChange={(e) =>
+                    handleWithdrawChange("amount", e.target.value)
+                  }
                 />
 
                 <select
@@ -384,10 +518,14 @@ export function FeriwalaManager() {
               </div>
 
               <div className="flex gap-2 mt-2">
-                <Button type="submit">
-                  <IndianRupee /> &nbsp; Record Withdrawal
+                <Button type="submit" disabled={isSubmitting}>
+                  <IndianRupee /> &nbsp; {isSubmitting ? "Saving..." : "Record Withdrawal"}
                 </Button>
-                <Button variant="outline" type="button" onClick={resetWithdrawalForm}>
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={resetWithdrawalForm}
+                >
                   <X /> Back
                 </Button>
               </div>
@@ -395,7 +533,6 @@ export function FeriwalaManager() {
           </CardContent>
         </Card>
       )}
-
     </div>
   );
 }

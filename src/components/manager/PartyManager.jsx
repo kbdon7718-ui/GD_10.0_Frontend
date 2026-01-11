@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "../ui/table";
 import { Plus, Trash2, Save, X, FileText } from "lucide-react";
+import { useSubmitOnce } from "../../utils/useSubmitOnce";
 import { toast } from "sonner";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
@@ -99,9 +100,10 @@ export function PartyManager() {
   };
 
   // ✅ Submit Sale (Maal Out)
-  const handleSubmit = async (e) => {
+  const [isSubmitting, wrap] = useSubmitOnce();
+
+  const handleSubmit = wrap(async (e) => {
     e.preventDefault();
-    setLoading(true);
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/api/party/add`, {
         method: "POST",

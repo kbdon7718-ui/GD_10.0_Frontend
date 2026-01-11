@@ -49,7 +49,7 @@ export function KabadiwalaManager() {
     date: new Date().toISOString().split("T")[0],
     vendor_id: "",
     vehicle_number: "",
-    scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
+    scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0, isNew: false, material: "" }],
   });
 
   useEffect(() => {
@@ -166,7 +166,7 @@ export function KabadiwalaManager() {
   const addScrapRow = () => {
     setForm(prev => ({
       ...prev,
-      scraps: [...prev.scraps, { scrap_type_id: "", weight: "", rate: 0, amount: 0 }]
+      scraps: [...prev.scraps, { scrap_type_id: "", weight: "", rate: 0, amount: 0, isNew: false, material: "" }]
     }));
   };
 
@@ -180,15 +180,28 @@ export function KabadiwalaManager() {
   const onScrapChange = (idx, key, val) => {
     setForm(prev => {
       const rows = [...prev.scraps];
-      rows[idx] = { ...rows[idx], [key]: val };
+      // update key
+      if (key === "scrap_type_id") {
+        // selecting an existing scrap type or switching to 'new'
+        if (val === "__new__") {
+          rows[idx] = { ...rows[idx], scrap_type_id: "", isNew: true, material: "", rate: "" };
+        } else {
+          rows[idx] = { ...rows[idx], scrap_type_id: val, isNew: false, material: "" };
+        }
+      } else {
+        rows[idx] = { ...rows[idx], [key]: val };
+      }
 
       const vendor = vendors.find(v => v.vendor_id === prev.vendor_id);
 
-      if (key === "scrap_type_id" && vendor) {
-        const rateEntry = vendor.rates.find(r => r.scrap_type_id === val);
-        rows[idx].rate = rateEntry ? Number(rateEntry.vendor_rate) : 0;
+      // Only auto-fill rate when material selection changes.
+      // If user edits rate manually, don't overwrite it.
+      if (key === "scrap_type_id" && !rows[idx].isNew && rows[idx].scrap_type_id && vendor) {
+        const rateEntry = vendor.rates.find(r => r.scrap_type_id === rows[idx].scrap_type_id);
+        rows[idx].rate = rateEntry ? Number(rateEntry.vendor_rate) : rows[idx].rate || 0;
       }
 
+      // recalc amount
       const w = Number(rows[idx].weight || 0);
       const r = Number(rows[idx].rate || 0);
       rows[idx].amount = Number((w * r).toFixed(2));
@@ -202,22 +215,41 @@ export function KabadiwalaManager() {
     0
   );
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Submit Purchase
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
-    if (!form.vendor_id) return toast.error("Select kabadiwala vendor");
-    if (form.scraps.some(s => !s.scrap_type_id || !s.weight))
-      return toast.error("Fill all scrap rows");
+    if (!form.vendor_id) {
+      toast.error("Select kabadiwala vendor");
+      setIsSubmitting(false);
+      return;
+    }
+    if (
+      form.scraps.some((s) =>
+        !s.weight ||
+        (!s.isNew && !s.scrap_type_id) ||
+        (s.isNew && (!String(s.material || "").trim() || String(s.rate || "").trim() === ""))
+      )
+    ) {
+      toast.error("Fill all scrap rows");
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const body = {
         company_id: COMPANY_ID,
         godown_id: GODOWN_ID,
         vendor_id: form.vendor_id,
-        scraps: form.scraps.map(s => ({
-          scrap_type_id: s.scrap_type_id,
-          weight: Number(s.weight)
+        scraps: form.scraps.map((s) => ({
+          scrap_type_id: s.scrap_type_id || undefined,
+          material: s.isNew ? s.material : undefined,
+          weight: Number(s.weight),
+          rate: s.rate !== undefined && s.rate !== null && s.rate !== '' ? Number(s.rate) : undefined,
         })),
         date: form.date,
       };
@@ -225,7 +257,7 @@ export function KabadiwalaManager() {
       const res = await fetch(`${API_URL}/api/kabadiwala/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -239,19 +271,22 @@ export function KabadiwalaManager() {
           date: new Date().toISOString().split("T")[0],
           vendor_id: "",
           vehicle_number: "",
-          scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
+          scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0, isNew: false, material: "" }],
         });
       } else toast.error(data.error);
-    } catch {
+    } catch (err) {
       toast.error("Server error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Submit PAYMENT to kabadiwala
   const submitPayment = async (e) => {
     e.preventDefault();
-    if (!payForm.vendor_id || !payForm.amount)
-      return toast.error("Vendor & amount required");
+    if (isSubmitting) return;
+    if (!payForm.vendor_id || !payForm.amount) return toast.error("Vendor & amount required");
+    setIsSubmitting(true);
 
     try {
       const res = await fetch(`${API_URL}/api/kabadiwala/withdrawal`, {
@@ -264,8 +299,8 @@ export function KabadiwalaManager() {
           amount: Number(payForm.amount),
           mode: payForm.mode,
           note: payForm.note,
-          date: payForm.date
-        })
+          date: payForm.date,
+        }),
       });
 
       const data = await res.json();
@@ -307,8 +342,10 @@ export function KabadiwalaManager() {
         });
         setActiveForm("purchase");
       } else toast.error(data.error || "Payment failed");
-    } catch {
+    } catch (err) {
       toast.error("Server error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -424,19 +461,31 @@ export function KabadiwalaManager() {
           <div key={i} className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3 items-center p-2 bg-gray-50 rounded-lg sm:bg-transparent sm:p-0">
 
             {/* Material */}
-            <select
-              className="border p-2 rounded"
-              value={row.scrap_type_id}
-              required
-              onChange={(e) => onScrapChange(i, "scrap_type_id", e.target.value)}
-            >
-              <option value="">Material</option>
-              {scrapTypes.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.material_type}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-1">
+              <select
+                className="border p-2 rounded w-full"
+                value={row.isNew ? "__new__" : row.scrap_type_id}
+                required
+                onChange={(e) => onScrapChange(i, "scrap_type_id", e.target.value)}
+              >
+                <option value="">Material</option>
+                {scrapTypes.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.material_type}
+                  </option>
+                ))}
+                <option value="__new__">+ Add new item</option>
+              </select>
+
+              {row.isNew && (
+                <Input
+                  type="text"
+                  placeholder="New item name"
+                  value={row.material}
+                  onChange={(e) => onScrapChange(i, "material", e.target.value)}
+                />
+              )}
+            </div>
 
             {/* Weight */}
             <Input
@@ -446,8 +495,8 @@ export function KabadiwalaManager() {
               onChange={(e) => onScrapChange(i, "weight", e.target.value)}
             />
 
-            {/* Rate */}
-            <Input type="number" value={row.rate} readOnly />
+            {/* Rate (editable) */}
+            <Input type="number" placeholder="Rate" value={row.rate} onChange={(e) => onScrapChange(i, "rate", e.target.value)} />
 
             {/* Amount */}
             <Input type="number" value={row.amount} readOnly />
@@ -468,9 +517,9 @@ export function KabadiwalaManager() {
 
         {/* Save / Cancel */}
         <div className="flex gap-3 mt-4">
-          <Button type="submit">
-            <Save className="mr-2" /> Save Purchase
-          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+              <Save className="mr-2" /> {isSubmitting ? 'Saving...' : 'Save Purchase'}
+            </Button>
 
           <Button
             type="button"
@@ -480,7 +529,7 @@ export function KabadiwalaManager() {
                 date: new Date().toISOString().split("T")[0],
                 vendor_id: "",
                 vehicle_number: "",
-                scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0 }],
+                scraps: [{ scrap_type_id: "", weight: "", rate: 0, amount: 0, isNew: false, material: "" }],
               });
             }}
           >
@@ -565,8 +614,8 @@ export function KabadiwalaManager() {
             </div>
 
             <div className="col-span-5 flex gap-2 mt-3">
-              <Button type="submit">
-                <IndianRupee className="mr-2" /> Record Withdrawal
+              <Button type="submit" disabled={isSubmitting}>
+                <IndianRupee className="mr-2" /> {isSubmitting ? 'Saving...' : 'Record Withdrawal'}
               </Button>
               <Button type="button" variant="outline" onClick={() => {
                 setPayForm({

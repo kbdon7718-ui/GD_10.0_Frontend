@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { useData } from '../../utils/dataContext';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Save, X, TrendingUp, TrendingDown } from 'lucide-react';
+import { useSubmitOnce } from '../../utils/useSubmitOnce';
 import { formatDate } from '../../utils/dateFormat';
 import { useMediaQuery } from '../../utils/useMediaQuery';
 
@@ -65,7 +66,9 @@ export function RokadiManager() {
     return balance;
   };
 
-  const handleSubmit = (e) => {
+  const [isSubmitting, wrap] = useSubmitOnce();
+
+  const handleSubmit = wrap((e) => {
     e.preventDefault();
     
     const currentBalance = calculateBalance();
@@ -280,10 +283,10 @@ export function RokadiManager() {
               </div>
 
               <div className="flex gap-2">
-                <Button type="submit">
-                  <Save className="mr-2 h-4 w-4" />
-                  {editingId ? 'Update' : 'Save'}
-                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                    <Save className="mr-2 h-4 w-4" />
+                    {isSubmitting ? 'Saving...' : (editingId ? 'Update' : 'Save')}
+                  </Button>
                 <Button type="button" variant="outline" onClick={resetForm}>
                   <X className="mr-2 h-4 w-4" />
                   Cancel

@@ -184,9 +184,6 @@ export default function DashboardOverview() {
 
           setApiBase(base);
           setApiDraft(base);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("scrapco_api_url", base);
-          }
 
           setData(json);
           setLastUpdated(new Date());
@@ -209,17 +206,11 @@ export default function DashboardOverview() {
   const saveApiBase = async () => {
     const next = normalizeBaseUrl(apiDraft);
     if (!next) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("scrapco_api_url", next);
-    }
     setApiBase(next);
     await fetchOverview();
   };
 
   const resetApiBase = async () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("scrapco_api_url");
-    }
     const next = getApiBaseUrl();
     setApiBase(next);
     setApiDraft(next);

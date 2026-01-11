@@ -12,6 +12,7 @@ import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { Plus, Trash2, Save } from "lucide-react";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
+import { useSubmitOnce } from "../../utils/useSubmitOnce";
 
 const COMPANY_ID = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
@@ -93,7 +94,9 @@ export default function MaalInManager() {
         SUBMIT
   ========================= */
 
-  const handleSubmit = async () => {
+  const [isSubmitting, wrap] = useSubmitOnce();
+
+  const handleSubmit = wrap(async () => {
     if (form.scraps.some((s) => !s.scrap_type_id || !s.weight || !s.rate)) {
       return toast.error("Fill all scrap rows and rates");
     }
@@ -158,7 +161,7 @@ export default function MaalInManager() {
       console.error(err);
       toast.error("Server error");
     }
-  };
+  });
 
   /* =========================
         UI
@@ -262,8 +265,8 @@ export default function MaalInManager() {
             />
           </div>
 
-          <Button onClick={handleSubmit} className="w-full">
-            <Save className="mr-2" /> Save Maal In
+          <Button onClick={handleSubmit} className="w-full" disabled={isSubmitting}>
+            <Save className="mr-2" /> {isSubmitting ? 'Saving...' : 'Save Maal In'}
           </Button>
         </CardContent>
       </Card>

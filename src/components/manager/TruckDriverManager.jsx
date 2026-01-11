@@ -19,6 +19,7 @@ import {
 } from "../ui/table";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Save, X } from "lucide-react";
+import { useSubmitOnce } from "../../utils/useSubmitOnce";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
@@ -87,8 +88,10 @@ export function TruckDriverManager() {
     setEditingId(null);
   };
 
+  const [isSubmitting, wrap] = useSubmitOnce();
+
   // ✅ Add or Update Record
-  const handleSubmit = async (e) => {
+  const handleSubmit = wrap(async (e) => {
     e.preventDefault();
     const returnAmount =
       parseFloat(formData.amountPaid || 0) -
@@ -269,8 +272,8 @@ export function TruckDriverManager() {
               </div>
 
               <div className="flex gap-2">
-                <Button type="submit">
-                  <Save className="mr-2 h-4 w-4" /> {editingId ? "Update" : "Save"}
+                <Button type="submit" disabled={isSubmitting}>
+                  <Save className="mr-2 h-4 w-4" /> {isSubmitting ? 'Saving...' : (editingId ? "Update" : "Save")}
                 </Button>
                 <Button type="button" variant="outline" onClick={resetForm}>
                   <X className="mr-2 h-4 w-4" /> Cancel

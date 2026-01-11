@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useData } from '../../utils/dataContext';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Save, X, Users2, TrendingDown } from 'lucide-react';
+import { useSubmitOnce } from '../../utils/useSubmitOnce';
 import { formatDate } from '../../utils/dateFormat';
 
 export function PartnershipManager() {
@@ -65,7 +66,9 @@ export function PartnershipManager() {
     setEditingWithdrawalId(null);
   };
 
-  const handlePartnerSubmit = (e) => {
+  const [isSubmittingPartner, wrapPartner] = useSubmitOnce();
+
+  const handlePartnerSubmit = wrapPartner((e) => {
     e.preventDefault();
     
     if (editingPartnerId) {
@@ -77,9 +80,11 @@ export function PartnershipManager() {
     }
     
     resetPartnerForm();
-  };
+  });
 
-  const handleWithdrawalSubmit = (e) => {
+  const [isSubmittingWithdrawal, wrapWithdrawal] = useSubmitOnce();
+
+  const handleWithdrawalSubmit = wrapWithdrawal((e) => {
     e.preventDefault();
     
     if (editingWithdrawalId) {
@@ -91,7 +96,7 @@ export function PartnershipManager() {
     }
     
     resetWithdrawalForm();
-  };
+  });
 
   const handleEditPartner = (partner) => {
     setPartnerForm(partner);

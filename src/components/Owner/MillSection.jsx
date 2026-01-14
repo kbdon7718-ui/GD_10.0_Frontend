@@ -416,8 +416,8 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
   {/* HEADER with Month Picker (Monthly Only) */}
   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
     <div>
-      <h2 className="text-lg sm:text-xl font-bold">Party / Mill Section</h2>
-      <p className="text-sm text-gray-500">Owner — Create sales & record payments</p>
+      <h2 className="text-lg sm:text-xl font-bold"> Mill Section</h2>
+      <p className="text-sm text-gray-500"></p>
     </div>
 
     <div className="flex items-center gap-2">
@@ -500,7 +500,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
               </DialogTrigger>
               <DialogContent className="max-w-3xl">
                 <DialogHeader><DialogTitle>Add Sale</DialogTitle></DialogHeader>
-                <form className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4" onSubmit={handleAddSale}>
+                <form className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4" onSubmit={handleAddSale}>
                   <div>
                     <Label>Firm Name</Label>
                     <Input
@@ -554,20 +554,12 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                   <div><Label>Weight (kg)</Label><Input type="number" required value={saleForm.weight} onChange={(e)=>setSaleForm({...saleForm, weight: Number(e.target.value)})} /></div>
                   <div>
                     <Label>Bill Rate (₹/kg)</Label>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() =>
-                          changeRateByTenth(setSaleForm, saleForm, "bill_rate", -0.1)
-                        }
-                      >
-                        -
-                      </Button>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                       <Input
                         type="number"
                         step="0.1"
                         required
+                        className="w-full"
                         value={saleForm.bill_rate}
                         onChange={(e) =>
                           setSaleForm({ ...saleForm, bill_rate: e.target.value })
@@ -579,34 +571,17 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                           })
                         }
                       />
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() =>
-                          changeRateByTenth(setSaleForm, saleForm, "bill_rate", 0.1)
-                        }
-                      >
-                        +
-                      </Button>
                     </div>
                   </div>
 
                   <div>
                     <Label>Original Rate (₹/kg)</Label>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() =>
-                          changeRateByTenth(setSaleForm, saleForm, "original_rate", -0.1)
-                        }
-                      >
-                        -
-                      </Button>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                       <Input
                         type="number"
                         step="0.1"
                         required
+                        className="w-full"
                         value={saleForm.original_rate}
                         onChange={(e) =>
                           setSaleForm({
@@ -621,15 +596,6 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                           })
                         }
                       />
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() =>
-                          changeRateByTenth(setSaleForm, saleForm, "original_rate", 0.1)
-                        }
-                      >
-                        +
-                      </Button>
                     </div>
                   </div>
                   <div><Label>GST %</Label><Input type="number" value={saleForm.gst_percent} onChange={(e)=>setSaleForm({...saleForm, gst_percent: Number(e.target.value)})} /></div>
@@ -646,7 +612,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                     </Select>
                   </div>
 
-                  <div className="col-span-2 p-3 border rounded bg-gray-50">
+                  <div className="sm:col-span-2 p-3 border rounded bg-gray-50">
                     <p>
                       Bill Amount: ₹
                       {(Number(saleForm.weight || 0) * (Number(saleForm.bill_rate) || 0)).toLocaleString()}
@@ -665,7 +631,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                     </p>
                   </div>
 
-                  <div className="col-span-2 flex justify-end pt-2">
+                  <div className="sm:col-span-2 flex justify-end pt-2">
                     <Button type="submit">Save Sale</Button>
                   </div>
                 </form>
@@ -1098,7 +1064,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                             <DialogTitle>Edit Sale</DialogTitle>
                           </DialogHeader>
                           {editSaleForm && (
-                            <form className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4" onSubmit={submitEditSale}>
+                            <form className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4" onSubmit={submitEditSale}>
                               <div>
                                 <Label>Firm Name</Label>
                                 <Input
@@ -1154,10 +1120,11 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
 
                               <div>
                                 <Label>Bill Rate (₹/kg)</Label>
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                                   <Button
                                     type="button"
                                     size="sm"
+                                    className="w-full sm:w-auto"
                                     onClick={() => changeRateByTenth(setEditSaleForm, editSaleForm, "bill_rate", -0.1)}
                                   >
                                     -
@@ -1166,6 +1133,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                     type="number"
                                     step="0.1"
                                     required
+                                    className="w-full"
                                     value={editSaleForm.bill_rate}
                                     onChange={(e) => setEditSaleForm({ ...editSaleForm, bill_rate: e.target.value })}
                                     onBlur={(e) => setEditSaleForm({ ...editSaleForm, bill_rate: normalizeRateString(e.target.value) })}
@@ -1173,6 +1141,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                   <Button
                                     type="button"
                                     size="sm"
+                                    className="w-full sm:w-auto"
                                     onClick={() => changeRateByTenth(setEditSaleForm, editSaleForm, "bill_rate", 0.1)}
                                   >
                                     +
@@ -1181,10 +1150,11 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                               </div>
                               <div>
                                 <Label>Original Rate (₹/kg)</Label>
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                                   <Button
                                     type="button"
                                     size="sm"
+                                    className="w-full sm:w-auto"
                                     onClick={() => changeRateByTenth(setEditSaleForm, editSaleForm, "original_rate", -0.1)}
                                   >
                                     -
@@ -1193,6 +1163,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                     type="number"
                                     step="0.1"
                                     required
+                                    className="w-full"
                                     value={editSaleForm.original_rate}
                                     onChange={(e) => setEditSaleForm({ ...editSaleForm, original_rate: e.target.value })}
                                     onBlur={(e) =>
@@ -1205,6 +1176,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                   <Button
                                     type="button"
                                     size="sm"
+                                    className="w-full sm:w-auto"
                                     onClick={() => changeRateByTenth(setEditSaleForm, editSaleForm, "original_rate", 0.1)}
                                   >
                                     +
@@ -1245,7 +1217,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                 </Select>
                               </div>
 
-                              <div className="col-span-2 p-3 border rounded bg-gray-50">
+                              <div className="sm:col-span-2 p-3 border rounded bg-gray-50">
                                 <p>
                                   Bill Amount: ₹
                                   {(Number(editSaleForm.weight || 0) * (Number(editSaleForm.bill_rate) || 0)).toLocaleString()}
@@ -1264,7 +1236,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                 </p>
                               </div>
 
-                              <div className="col-span-2 flex justify-between pt-2">
+                              <div className="sm:col-span-2 flex flex-col sm:flex-row sm:justify-between gap-2 pt-2">
                                 <div>
                                   <Button
                                     type="button"
@@ -1279,7 +1251,7 @@ const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7
                                     Delete
                                   </Button>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-col sm:flex-row gap-2">
                                   <Button type="button" variant="outline" onClick={() => setEditSaleForm(null)}>
                                     Cancel
                                   </Button>

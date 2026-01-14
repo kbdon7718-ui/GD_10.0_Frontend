@@ -22,11 +22,11 @@ export function Welcome({ onContinue }) {
         <Card>
           <CardHeader>
             <CardTitle>Welcome</CardTitle>
-            <CardDescription>Continue to the Owner dashboard</CardDescription>
+            <CardDescription></CardDescription>
           </CardHeader>
           <CardContent>
             <Button className="w-full" onClick={onContinue}>
-              Continue
+              Continue to Login
             </Button>
           </CardContent>
         </Card>

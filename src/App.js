@@ -4,14 +4,16 @@ import { Toaster } from "./components/ui/sonner";
 
 import { OwnersDashboard } from "./components/Owner/OwnersDashboard";
 import { ManagerDashboard } from "./components/manager/ManagerDashboard";
+import { VendorDashboard } from "./components/vendor/VendorDashboard";
 import { Welcome } from "./components/Owner/Welcome";
+import { Login } from "./components/Owner/Login";
 
 import { AuthProvider, useAuth } from "./utils/authContext";
 import { DataProvider } from "./utils/dataContext";
 import { PageRefreshProvider } from "./utils/pageRefreshContext";
 
 function AppContent() {
-  const { user, setRole } = useAuth();
+  const { role, loading, isAuthenticated } = useAuth();
 
   const [hasSeenWelcome, setHasSeenWelcome] = useState(true);
 
@@ -28,19 +30,28 @@ function AppContent() {
       <Welcome
         onContinue={() => {
           localStorage.setItem("scrapco_seen_welcome", "1");
-          setRole("owner");
           setHasSeenWelcome(true);
         }}
       />
     );
   }
 
+  if (loading) return null;
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
   // 👇 ROLE BASED ROUTING
-  if (user.role === "manager") {
+  if (role === "vendor") {
+    return <VendorDashboard />;
+  }
+
+  if (role === "manager") {
     return <ManagerDashboard />;
   }
 
-  if (user.role === "owner") {
+  if (role === "owner") {
     return (
       <OwnersDashboard
         activeSection={activeSection}

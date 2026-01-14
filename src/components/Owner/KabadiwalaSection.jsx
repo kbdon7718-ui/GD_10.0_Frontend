@@ -162,27 +162,30 @@ export function KabadiwalaSection() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredVendors.map((v) => (
             <Card key={v.vendor_id}>
-              <CardHeader>
-                <CardTitle className="text-base">{v.vendor_name}</CardTitle>
-                <CardDescription>Outstanding</CardDescription>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <CardTitle className="text-base truncate">{v.vendor_name}</CardTitle>
+                  </div>
+                  <p
+                    className={`text-lg font-semibold shrink-0 ${
+                      v.balance > 0
+                        ? "text-green-600"
+                        : v.balance < 0
+                        ? "text-red-600"
+                        : ""
+                    }`}
+                  >
+                    ₹{Number(v.balance).toLocaleString()}
+                  </p>
+                </div>
               </CardHeader>
 
-              <CardContent>
-                <p
-                  className={`text-2xl font-bold ${
-                    v.balance > 0
-                      ? "text-green-600"
-                      : v.balance < 0
-                      ? "text-red-600"
-                      : ""
-                  }`}
-                >
-                  ₹{Number(v.balance).toLocaleString()}
-                </p>
-
+              <CardContent className="pt-0">
                 <Button
                   size="sm"
-                  className="mt-3"
+                  variant="outline"
+                  className="h-8 px-3"
                   onClick={() => loadLedger(v)}
                 >
                   View History
@@ -202,9 +205,7 @@ export function KabadiwalaSection() {
       >
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-sm text-gray-500">Chronological view</p>
-            </div>
+            <div className="min-w-0" />
             <Button
               size="sm"
               variant="outline"

@@ -1,20 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardHeader,
   CardTitle,
-  CardDescription,
   CardContent,
 } from "../ui/card";
-
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TableHead,
-  TableRow,
-} from "../ui/table";
 
 import { Button } from "../ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
@@ -201,6 +191,38 @@ export default function MaalIn() {
       }
     : summary;
 
+  const groupedEntries = useMemo(() => {
+    const byKey = new Map();
+
+    for (const row of filteredMaalIn) {
+      const dateKey = String(row.date || "").slice(0, 10);
+      const vendorName = row.supplier || "—";
+      const vendorType = row.source || "—";
+      const key = `${dateKey}__${vendorType}__${vendorName}`;
+
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          key,
+          date: row.date,
+          vendorName,
+          vendorType,
+          items: [],
+          totalWeight: 0,
+          totalAmount: 0,
+        });
+      }
+
+      const group = byKey.get(key);
+      group.items.push(row);
+      group.totalWeight += Number(row.weight || 0);
+      group.totalAmount += Number(row.amount || 0);
+    }
+
+    return Array.from(byKey.values()).sort(
+      (a, b) => new Date(b.date) - new Date(a.date)
+    );
+  }, [filteredMaalIn]);
+
   return (
     <div className="space-y-6">
       {/* HEADER */}
@@ -280,16 +302,7 @@ export default function MaalIn() {
       </div>
 
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Total Weight</CardTitle>
-          </CardHeader>
-          <CardContent className="text-yellow-600 font-semibold">
-              {displaySummary.totalWeight} KG
-          </CardContent>
-        </Card>
-
+      <div className="grid grid-cols-1 gap-3">
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Total Amount</CardTitle>
@@ -304,95 +317,64 @@ export default function MaalIn() {
       <Card>
         <CardHeader>
           <CardTitle>Maal In Details</CardTitle>
-          <CardDescription>Owner view — read only</CardDescription>
         </CardHeader>
 
         <CardContent>
-          {/*
-            Mobile UX fix:
-            - Replace desktop table with stacked cards on < md.
-            - Keep table only on md+.
-            - No horizontal scrolling on phones.
-          */}
-          {isDesktop ? (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Material</TableHead>
-                    <TableHead>Weight</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Source</TableHead>
-                  </TableRow>
-                </TableHeader>
-
-                <TableBody>
-                  {filteredMaalIn.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-6">
-                        No records found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredMaalIn.map((m) => (
-                        <TableRow key={m.id}>
-                          <TableCell>{formatDate(m.date)}</TableCell>
-                          <TableCell>{m.material}</TableCell>
-                          <TableCell>{m.weight}</TableCell>
-                          <TableCell>₹{m.rate}</TableCell>
-                          <TableCell className="text-green-600 font-semibold">₹{m.amount}</TableCell>
-                          <TableCell>{m.supplier}</TableCell>
-                          <TableCell>{m.source}</TableCell>
-                        </TableRow>
-                      ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+          {groupedEntries.length === 0 ? (
+            <p className="text-sm text-gray-500 py-6 text-center">No records found</p>
           ) : (
             <div className="space-y-3">
-              {filteredMaalIn.length === 0 ? (
-                <p className="text-sm text-gray-500 py-6 text-center">No records found</p>
-              ) : (
-                filteredMaalIn.map((m) => (
-                  <Card key={m.id} className="w-full">
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-gray-900 dark:text-white truncate">{m.material}</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{formatDate(m.date)}</p>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
-                          <p className="text-sm font-semibold text-green-600">₹{Number(m.amount || 0).toLocaleString()}</p>
-                        </div>
+              {groupedEntries.map((g) => (
+                <Card key={g.key} className="w-full">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 dark:text-white truncate">
+                          {g.vendorName}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 capitalize truncate">
+                          {g.vendorType}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {formatDate(g.date)}
+                        </p>
                       </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Total Amount</p>
+                        <p className="text-sm font-semibold text-green-600">
+                          ₹{Number(g.totalAmount || 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="min-w-0">
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Weight</p>
-                          <p className="text-sm text-gray-900 dark:text-white truncate">{m.weight} KG</p>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Rate</p>
-                          <p className="text-sm text-gray-900 dark:text-white truncate">₹{m.rate}</p>
-                        </div>
-                        <div className="min-w-0 col-span-2">
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Supplier</p>
-                          <p className="text-sm text-gray-900 dark:text-white truncate">{m.supplier || "—"}</p>
-                        </div>
-                        <div className="min-w-0 col-span-2">
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Source</p>
-                          <p className="text-sm text-gray-900 dark:text-white truncate">{m.source || "—"}</p>
-                        </div>
+                    <div className="rounded-md border overflow-hidden">
+                      <div className="grid grid-cols-4 gap-2 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 bg-background">
+                        <div className="truncate">Scrap</div>
+                        <div className="text-right">Weight</div>
+                        <div className="text-right">Rate</div>
+                        <div className="text-right">Amount</div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
+                      <div className="divide-y">
+                        {g.items.map((m, idx) => (
+                          <div key={`${m.id}-${idx}`} className="grid grid-cols-4 gap-2 px-3 py-2 text-sm">
+                            <div className="truncate text-gray-900 dark:text-white">{m.material}</div>
+                            <div className="text-right tabular-nums text-gray-900 dark:text-white">
+                              {Number(m.weight || 0)}
+                            </div>
+                            <div className="text-right tabular-nums text-gray-900 dark:text-white">
+                              ₹{Number(m.rate || 0)}
+                            </div>
+                            <div className="text-right tabular-nums font-medium text-green-600">
+                              ₹{Number(m.amount || 0).toLocaleString()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </CardContent>

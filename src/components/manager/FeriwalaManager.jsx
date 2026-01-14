@@ -15,6 +15,7 @@ import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 import { useSubmitOnce } from "../../utils/useSubmitOnce";
 import { usePageRefresh } from "../../utils/pageRefreshContext";
 
+
 export function FeriwalaManager() {
   const API_URL = getApiBaseUrl();
   const [activeForm, setActiveForm] = useState("purchase");
@@ -27,17 +28,7 @@ export function FeriwalaManager() {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split("T")[0],
     vendor_id: "",
-    scraps: [
-      {
-        material: "",
-        rate: "",
-        weight: "",
-        amount: "",
-        isNew: false,
-        material_name: "",
-        rateEdited: false,
-      },
-    ],
+    scraps: [{ material: "", rate: "", weight: "", amount: "", isNew: false, material_name: "", rateEdited: false }],
   });
 
   // WITHDRAWAL FORM
@@ -76,7 +67,8 @@ export function FeriwalaManager() {
     try {
       const res = await fetch(`${API_URL}/api/rates/vendors-with-rates`);
       const data = await res.json();
-      if (data.success) setVendors(data.vendors.filter((v) => v.type === "feriwala"));
+      if (data.success)
+        setVendors(data.vendors.filter((v) => v.type === "feriwala"));
     } catch (err) {
       toast.error("Failed to load vendors");
     }
@@ -100,17 +92,7 @@ export function FeriwalaManager() {
     setFormData({
       date: new Date().toISOString().split("T")[0],
       vendor_id: "",
-      scraps: [
-        {
-          material: "",
-          rate: "",
-          weight: "",
-          amount: "",
-          isNew: false,
-          material_name: "",
-          rateEdited: false,
-        },
-      ],
+      scraps: [{ material: "", rate: "", weight: "", amount: "", isNew: false, material_name: "", rateEdited: false }],
     });
   };
 
@@ -148,10 +130,10 @@ export function FeriwalaManager() {
 
   const handleScrapChange = (index, key, value) => {
     const updated = [...formData.scraps];
-
     if (key === "material") {
+      // selecting existing material id or 'new'
       if (value === "__new__") {
-        updated[index].material = "";
+        updated[index].material = ""; // clear id
         updated[index].isNew = true;
         updated[index].material_name = "";
         updated[index].rate = "";
@@ -160,12 +142,12 @@ export function FeriwalaManager() {
         updated[index].material = value;
         updated[index].isNew = false;
         updated[index].material_name = "";
-        updated[index].rateEdited = false;
-
+        // auto-populate vendor rate on material change (user can edit afterwards)
         const vendor = vendors.find((v) => v.vendor_id === formData.vendor_id);
         if (vendor) {
           const rateEntry = vendor.rates.find((r) => r.scrap_type_id === value);
           updated[index].rate = rateEntry ? rateEntry.vendor_rate : 0;
+          updated[index].rateEdited = false;
         }
       }
     } else {
@@ -187,26 +169,14 @@ export function FeriwalaManager() {
   const addScrapRow = () => {
     setFormData({
       ...formData,
-      scraps: [
-        ...formData.scraps,
-        {
-          material: "",
-          rate: "",
-          weight: "",
-          amount: "",
-          isNew: false,
-          material_name: "",
-          rateEdited: false,
-        },
-      ],
+      scraps: [...formData.scraps, { material: "", rate: "", weight: "", amount: "", isNew: false, material_name: "", rateEdited: false }],
     });
   };
 
   const removeScrap = (i) => {
     const updated = formData.scraps.filter((_, idx) => idx !== i);
     setFormData({ ...formData, scraps: updated });
-  };
-
+    };
   /* ================================
     SUBMIT PURCHASE
   ================================ */
@@ -246,7 +216,7 @@ export function FeriwalaManager() {
             scrap_type_id: s.isNew ? undefined : s.material,
             material: s.isNew ? s.material_name : undefined,
             weight: Number(s.weight),
-            rate: s.rate !== undefined && s.rate !== null && s.rate !== "" ? Number(s.rate) : undefined,
+            rate: s.rate !== undefined && s.rate !== null && s.rate !== '' ? Number(s.rate) : undefined,
           })),
           account_id,
         }),
@@ -334,6 +304,7 @@ export function FeriwalaManager() {
 
   return (
     <div className="space-y-6">
+
       {activeForm === "purchase" ? (
         <Card>
           <CardHeader className="px-4 sm:px-6">
@@ -359,7 +330,9 @@ export function FeriwalaManager() {
                   className="border p-2 rounded w-full"
                   value={formData.vendor_id}
                   required
-                  onChange={(e) => onVendorChange(e.target.value)}
+                  onChange={(e) =>
+                    onVendorChange(e.target.value)
+                  }
                 >
                   <option value="">-- Select Feriwala --</option>
                   {vendors.map((v) => (
@@ -373,10 +346,7 @@ export function FeriwalaManager() {
               {/* SCRAPS */}
               <Label>Scrap Items</Label>
               {formData.scraps.map((row, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center"
-                >
+                <div key={i} className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center">
                   <div className="space-y-1">
                     <select
                       className="border p-2 rounded w-full"
@@ -400,9 +370,7 @@ export function FeriwalaManager() {
                         type="text"
                         placeholder="New item name"
                         value={row.material_name}
-                        onChange={(e) =>
-                          handleScrapChange(i, "material_name", e.target.value)
-                        }
+                        onChange={(e) => handleScrapChange(i, "material_name", e.target.value)}
                       />
                     )}
                   </div>
@@ -420,7 +388,9 @@ export function FeriwalaManager() {
                     type="number"
                     placeholder="Rate"
                     value={row.rate}
-                    onChange={(e) => handleScrapChange(i, "rate", e.target.value)}
+                    onChange={(e) =>
+                      handleScrapChange(i, "rate", e.target.value)
+                    }
                   />
 
                   <Input type="number" value={row.amount} readOnly />
@@ -439,7 +409,7 @@ export function FeriwalaManager() {
 
               <div className="flex gap-2 mt-4">
                 <Button type="submit" disabled={isSubmitting}>
-                  <Save /> {isSubmitting ? "Saving..." : "Save Purchase"}
+                  <Save /> {isSubmitting ? 'Saving...' : 'Save Purchase'}
                 </Button>
                 <Button variant="outline" type="button" onClick={resetForm}>
                   <X /> Cancel
@@ -456,11 +426,7 @@ export function FeriwalaManager() {
                 <CardTitle>Record Withdrawal</CardTitle>
                 <CardDescription>Feriwala takes money from godown</CardDescription>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setActiveForm("purchase")}
-              >
+              <Button size="sm" variant="outline" onClick={() => setActiveForm("purchase")}>
                 <X className="h-4 w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Back</span>
               </Button>
@@ -474,9 +440,7 @@ export function FeriwalaManager() {
                   className="border p-2 rounded"
                   value={withdrawForm.vendor_id}
                   required
-                  onChange={(e) =>
-                    handleWithdrawChange("vendor_id", e.target.value)
-                  }
+                  onChange={(e) => handleWithdrawChange("vendor_id", e.target.value)}
                 >
                   <option value="">-- Select Feriwala --</option>
                   {vendors.map((v) => (
@@ -496,9 +460,7 @@ export function FeriwalaManager() {
                   type="number"
                   placeholder="Amount"
                   value={withdrawForm.amount}
-                  onChange={(e) =>
-                    handleWithdrawChange("amount", e.target.value)
-                  }
+                  onChange={(e) => handleWithdrawChange("amount", e.target.value)}
                 />
 
                 <select
@@ -519,13 +481,9 @@ export function FeriwalaManager() {
 
               <div className="flex gap-2 mt-2">
                 <Button type="submit" disabled={isSubmitting}>
-                  <IndianRupee /> &nbsp; {isSubmitting ? "Saving..." : "Record Withdrawal"}
+                  <IndianRupee /> &nbsp; {isSubmitting ? 'Saving...' : 'Record Withdrawal'}
                 </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={resetWithdrawalForm}
-                >
+                <Button variant="outline" type="button" onClick={resetWithdrawalForm}>
                   <X /> Back
                 </Button>
               </div>
@@ -533,6 +491,8 @@ export function FeriwalaManager() {
           </CardContent>
         </Card>
       )}
+
     </div>
   );
 }
+

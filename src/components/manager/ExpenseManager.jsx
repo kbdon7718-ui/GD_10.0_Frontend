@@ -169,14 +169,13 @@ export function ExpenseManager() {
       };
 
       // LABOUR
-      let withdrawalRes = null;
       if (formData.category === "Labour") {
         payload.labour_id = formData.labour_id;
         payload.paid_to =
           labours.find((l) => l.id === formData.labour_id)?.name || "";
 
         // Also record as withdrawal for labour history
-        withdrawalRes = await fetch(`${API}/api/labour/withdraw`, {
+        await fetch(`${API}/api/labour/withdraw`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -188,7 +187,7 @@ export function ExpenseManager() {
             mode: normalizePaymentMode(formData.transactionMode),
           }),
         });
-        // Optionally check withdrawalRes.ok and show error if needed
+        // Intentionally fire-and-forget: expense is primary record
       }
 
       // FERIWALA
@@ -282,19 +281,6 @@ export function ExpenseManager() {
               {/* … form fields exactly same as you pasted … */}
            
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {/* Date */}
-                <div className="space-y-2">
-                  <Label>Date</Label>
-                  <Input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, date: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-
                 {/* Category */}
                 <div className="space-y-2">
                   <Label>Category</Label>
@@ -322,17 +308,6 @@ export function ExpenseManager() {
                   </Select>
                 </div>
 
-                {/* Description */}
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Input
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
-                  />
-                </div>
-
                 {/* Amount */}
                 <div className="space-y-2">
                   <Label>Amount (₹)</Label>
@@ -347,25 +322,6 @@ export function ExpenseManager() {
                     }
                     required
                   />
-                </div>
-
-                {/* Payment Mode */}
-                <div className="space-y-2">
-                  <Label>Payment Mode</Label>
-                  <Select
-                    value={formData.transactionMode}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, transactionMode: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Cash">Cash</SelectItem>
-                      <SelectItem value="Bank">Bank</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 {/* Paid To / Labour */}
@@ -453,14 +409,58 @@ export function ExpenseManager() {
   </div>
 )}
 
+                {/* Payment Mode */}
+                <div className="space-y-2">
+                  <Label>Payment Mode</Label>
+                  <Select
+                    value={formData.transactionMode}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, transactionMode: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash">Cash</SelectItem>
+                      <SelectItem value="Bank">Bank</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Note */}
+                <div className="space-y-2">
+                  <Label>Note</Label>
+                  <Input
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData({ ...formData, description: e.target.value })
+                    }
+                    placeholder="Optional"
+                  />
+                </div>
+
+                {/* Date (kept for backend compatibility) */}
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) =>
+                      setFormData({ ...formData, date: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+
               </div>
 
-              <div className="flex gap-2 mt-4">
-                <Button type="submit" disabled={loading}>
+              <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                <Button type="submit" disabled={loading} className="w-full sm:w-auto">
                   <Save className="mr-2 h-4 w-4" />
                   {loading ? "Saving..." : "Save Expense"}
                 </Button>
-                <Button type="button" variant="outline" onClick={resetForm}>
+                <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">
                   <X className="mr-2 h-4 w-4" /> Cancel
                 </Button>
               </div>

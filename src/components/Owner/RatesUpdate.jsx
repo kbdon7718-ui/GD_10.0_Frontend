@@ -85,8 +85,8 @@ export default function RatesUpdate() {
   // set vendor rate dialog
   const [setVendorRateOpen, setSetVendorRateOpen] = useState(false);
   const [selectedVendorForRate, setSelectedVendorForRate] = useState(null);
-  const [selectedScrapForRate, setSelectedScrapForRate] = useState("");
-  const [vendorRateValue, setVendorRateValue] = useState("");
+  const [vendorRatesDraft, setVendorRatesDraft] = useState({});
+  const [savingVendorRates, setSavingVendorRates] = useState(false);
 
   // fetch all
   const fetchAll = async () => {
@@ -287,44 +287,71 @@ export default function RatesUpdate() {
     }
   };
 
-  // Set vendor rate (insert or update)
-  const handleSetVendorRate = async () => {
-    if (
-      !selectedVendorForRate ||
-      !selectedScrapForRate ||
-      Number.isNaN(Number(vendorRateValue)) ||
-      Number(vendorRateValue) <= 0
-    ) {
-      toast.error("Select vendor, material and enter a valid rate");
+  const handleSaveVendorRates = async () => {
+    if (!selectedVendorForRate) {
+      toast.error("Select vendor");
       return;
     }
+    if (!materials || materials.length === 0) {
+      toast.error("No materials available");
+      return;
+    }
+
+    const rows = materials.map((m) => {
+      const raw = vendorRatesDraft?.[m.id];
+      const rate = Number(raw);
+      return {
+        id: m.id,
+        name: m.material_type,
+        rate,
+      };
+    });
+
+    const invalid = rows.find((r) => Number.isNaN(r.rate) || r.rate <= 0);
+    if (invalid) {
+      toast.error(`Enter valid rate for ${invalid.name}`);
+      return;
+    }
+
+    setSavingVendorRates(true);
     try {
-      const res = await fetch(`${API}/api/rates/set-vendor-rate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vendor_id: selectedVendorForRate.vendor_id,
-          scrap_type_id: selectedScrapForRate,
-          vendor_rate: Number(vendorRateValue),
-        }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Failed to set vendor rate");
-      toast.success("Vendor rate saved");
+      for (const r of rows) {
+        const res = await fetch(`${API}/api/rates/set-vendor-rate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            vendor_id: selectedVendorForRate.vendor_id,
+            scrap_type_id: r.id,
+            vendor_rate: r.rate,
+          }),
+        });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || `Failed to set rate for ${r.name}`);
+      }
+
+      toast.success("Vendor rates saved");
       setSetVendorRateOpen(false);
       setSelectedVendorForRate(null);
-      setSelectedScrapForRate("");
-      setVendorRateValue("");
+      setVendorRatesDraft({});
       fetchAll();
     } catch (err) {
-      toast.error(err.message || "Failed to set vendor rate");
+      toast.error(err.message || "Failed to save vendor rates");
       console.error(err);
+    } finally {
+      setSavingVendorRates(false);
     }
   };
 
   // helper to open set-vendor-rate modal with vendor
   const openSetRateModal = (vendor) => {
     setSelectedVendorForRate(vendor);
+    const existing = new Map((vendor?.rates || []).map((r) => [r.scrap_type_id, r.vendor_rate]));
+    const draft = {};
+    (materials || []).forEach((m) => {
+      const current = existing.get(m.id);
+      draft[m.id] = current != null ? String(current) : String(m.global_rate ?? "");
+    });
+    setVendorRatesDraft(draft);
     setSetVendorRateOpen(true);
   };
 
@@ -456,7 +483,11 @@ export default function RatesUpdate() {
       </div>
 
       {/* GLOBAL RATES TABLE */}
-      <Card>
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+          Global Scrap Rates
+        </h3>
+        <Card>
         <CardHeader>
           {/*
             Mobile-first header:
@@ -641,10 +672,15 @@ export default function RatesUpdate() {
             </div>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </div>
 
       {/* VENDORS + RATES */}
-      <Card>
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+          Vendor Rates
+        </h3>
+        <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -760,7 +796,8 @@ export default function RatesUpdate() {
             </div>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </div>
 
       {/* DIALOGS */}
 
@@ -833,10 +870,10 @@ export default function RatesUpdate() {
 
       {/* Set Vendor Rate Dialog */}
       <Dialog open={setVendorRateOpen} onOpenChange={setSetVendorRateOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Set Vendor Rate</DialogTitle>
-            <DialogDescription>Choose material and enter vendor-specific rate</DialogDescription>
+            <DialogDescription></DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
@@ -845,29 +882,39 @@ export default function RatesUpdate() {
               <Input value={selectedVendorForRate?.vendor_name || ""} disabled />
             </div>
 
-            <div>
-              <Label>Material</Label>
-              <Select value={selectedScrapForRate} onValueChange={(v) => setSelectedScrapForRate(v)}>
-                <SelectTrigger><SelectValue placeholder="Select material" /></SelectTrigger>
-                <SelectContent>
-                  {materials.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.material_type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Vendor Rate (₹/kg)</Label>
-              <Input type="number" value={vendorRateValue} onChange={(e) => setVendorRateValue(e.target.value)} />
+            <div className="rounded-md border overflow-hidden">
+              <div className="grid grid-cols-2 gap-2 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 bg-background">
+                <div className="truncate">Scrap Type</div>
+                <div className="text-right">Rate (₹/kg)</div>
+              </div>
+              <div className="max-h-[55vh] overflow-y-auto divide-y">
+                {materials.map((m) => (
+                  <div key={m.id} className="grid grid-cols-2 gap-2 px-3 py-2 items-center">
+                    <div className="truncate text-sm text-gray-900 dark:text-white">{m.material_type}</div>
+                    <div className="flex justify-end">
+                      <Input
+                        type="number"
+                        className="w-32 text-right"
+                        value={vendorRatesDraft?.[m.id] ?? ""}
+                        onChange={(e) =>
+                          setVendorRatesDraft((prev) => ({
+                            ...(prev || {}),
+                            [m.id]: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setSetVendorRateOpen(false)}>Cancel</Button>
-            <Button onClick={handleSetVendorRate}>Save Rate</Button>
+            <Button onClick={handleSaveVendorRates} disabled={savingVendorRates}>
+              {savingVendorRates ? "Saving..." : "Save Rates"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

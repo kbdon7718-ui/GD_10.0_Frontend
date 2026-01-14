@@ -68,6 +68,7 @@ export function LabourSection() {
     name: "",
     contact: "",
     worker_type: "Labour",
+    daily_wage: 0,
     monthly_salary: 0,
   });
 
@@ -124,8 +125,16 @@ export function LabourSection() {
   /* ================= ADD ================= */
 
   const handleAddWorker = async () => {
-    if (!newWorker.name || Number(newWorker.monthly_salary) <= 0) {
-      toast.error("Please enter Name and Monthly Salary");
+    if (!newWorker.name) {
+      toast.error("Please enter Name");
+      return;
+    }
+
+    const monthly = Number(newWorker.monthly_salary || 0);
+    const daily = Number(newWorker.daily_wage || 0);
+
+    if (monthly <= 0 && daily <= 0) {
+      toast.error("Enter Monthly Salary or Daily Salary");
       return;
     }
 
@@ -148,6 +157,7 @@ export function LabourSection() {
           name: "",
           contact: "",
           worker_type: "Labour",
+          daily_wage: 0,
           monthly_salary: 0,
         });
         fetchLabours();
@@ -624,7 +634,7 @@ export function LabourSection() {
       </div>
 
       <div>
-        <Label>Monthly Salary (₹) *</Label>
+        <Label>Monthly Salary (₹)</Label>
         <Input
           type="number"
           value={newWorker.monthly_salary}
@@ -632,6 +642,20 @@ export function LabourSection() {
             setNewWorker({
               ...newWorker,
               monthly_salary: Number(e.target.value),
+            })
+          }
+        />
+      </div>
+
+      <div>
+        <Label>Daily Salary (₹)</Label>
+        <Input
+          type="number"
+          value={newWorker.daily_wage}
+          onChange={(e) =>
+            setNewWorker({
+              ...newWorker,
+              daily_wage: Number(e.target.value),
             })
           }
         />

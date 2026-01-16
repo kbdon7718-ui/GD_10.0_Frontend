@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient";
 
 const normalizeRole = (role) => {
   const r = String(role || "").toLowerCase();
+  if (r === "admin") return "admin";
   if (r === "vendor") return "vendor";
   if (r === "manager") return "manager";
   return "owner";
@@ -72,7 +73,7 @@ export async function loginWithIdentifier(identifier, password) {
     return { ok: false, error: "Profile not found" };
   }
 
-  const redirectTo = role === "vendor" || role === "manager" ? "vendor" : "owner";
+  const redirectTo = role === "admin" ? "admin" : role === "vendor" || role === "manager" ? "vendor" : "owner";
   return { ok: true, role, redirectTo, user };
 }
 

@@ -22,6 +22,7 @@ import { useSubmitOnce } from "../../utils/useSubmitOnce";
 import { toast } from "sonner";
 import { formatDate } from "../../utils/dateFormat";
 import { useMediaQuery } from "../../utils/useMediaQuery";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 const MATERIAL_TYPES = [
   "Iron",
@@ -34,6 +35,7 @@ const MATERIAL_TYPES = [
 
 export function PartyManager() {
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const API = getApiBaseUrl();
   const [sales, setSales] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -52,7 +54,7 @@ export function PartyManager() {
   const fetchSales = async () => {
     try {
       const res = await fetch(
-        `${API_URL}/api/party/list/${COMPANY_ID}`
+        `${API}/api/party/list/${COMPANY_ID}`
       );
       const data = await res.json();
       if (res.ok) {
@@ -105,7 +107,7 @@ export function PartyManager() {
   const handleSubmit = wrap(async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/party/add`, {
+      const res = await fetch(`${API}/api/party/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

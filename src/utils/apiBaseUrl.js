@@ -17,7 +17,9 @@ export function getLocalCandidateBaseUrl() {
 }
 
 export function getApiBaseUrl() {
-  const env = normalizeBaseUrl(process.env.REACT_APP_API_URL);
+  const env = normalizeBaseUrl(
+    (import.meta?.env?.VITE_API_URL || import.meta?.env?.REACT_APP_API_URL) ?? ""
+  );
   if (env) return env;
 
   // Default to localhost for local development
@@ -26,7 +28,7 @@ export function getApiBaseUrl() {
 
 export function getApiBaseUrlCandidates(preferredBaseUrl = "") {
   const candidatesRaw = [
-    normalizeBaseUrl(process.env.REACT_APP_API_URL),
+    normalizeBaseUrl((import.meta?.env?.VITE_API_URL || import.meta?.env?.REACT_APP_API_URL) ?? ""),
     normalizeBaseUrl(preferredBaseUrl),
     normalizeBaseUrl(getLocalCandidateBaseUrl()),
     LOCALHOST_API,

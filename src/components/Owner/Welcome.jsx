@@ -1,11 +1,18 @@
 import React from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
-import { Building2 } from "lucide-react";
+import { Building2, Shield } from "lucide-react";
 
-export function Welcome({ onContinue }) {
+export function Welcome({ onContinue, onAdminLogin }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-100 dark:from-gray-900 dark:to-gray-800 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-100 dark:from-gray-900 dark:to-gray-800 p-4 relative">
+      {typeof onAdminLogin === "function" ? (
+        <div className="absolute top-4 right-4">
+          <Button variant="outline" size="sm" onClick={onAdminLogin}>
+            <Shield className="mr-2 h-4 w-4" /> Admin Login
+          </Button>
+        </div>
+      ) : null}
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <div className="flex items-center justify-center mb-3">

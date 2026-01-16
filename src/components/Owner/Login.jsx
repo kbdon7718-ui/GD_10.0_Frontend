@@ -5,12 +5,14 @@ import { Label } from "../ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { useAuth } from "../../utils/authContext";
 import { toast } from "sonner";
-import { LogIn, Lock, Building2, User } from "lucide-react";
+import { LogIn, Lock, Building2, User, Shield } from "lucide-react";
 
-export function Login() {
+export function Login({ expectedRole = null }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const { login, loading } = useAuth();
+  const { login, logout, loading } = useAuth();
+
+  const isAdminMode = expectedRole === "admin";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -20,6 +22,14 @@ export function Login() {
         toast.error(result?.error || "Login failed");
         return;
       }
+
+      if (isAdminMode && result?.role !== "admin") {
+        await logout();
+        toast.error("Admin access required");
+        return;
+      }
+
+      localStorage.removeItem("scrapco_login_target");
 
       toast.success("Login successful");
     } catch (error) {
@@ -43,7 +53,15 @@ export function Login() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Login</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {isAdminMode ? (
+                <>
+                  <Shield className="h-4 w-4" /> Admin Login
+                </>
+              ) : (
+                "Login"
+              )}
+            </CardTitle>
             <CardDescription></CardDescription>
           </CardHeader>
           <CardContent>

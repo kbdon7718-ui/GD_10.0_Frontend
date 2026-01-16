@@ -4,6 +4,7 @@ const normalizeRole = (role) => {
   const r = String(role || "").toLowerCase();
   if (r === "admin") return "admin";
   if (r === "vendor") return "vendor";
+  if (r === "godam") return "owner";
   if (r === "manager") return "manager";
   return "owner";
 };

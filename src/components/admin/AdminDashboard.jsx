@@ -42,11 +42,21 @@ export function AdminDashboard() {
   const [vendors, setVendors] = useState([]);
   const [audit, setAudit] = useState([]);
 
+  const [editingId, setEditingId] = useState(null);
+  const [editRole, setEditRole] = useState("vendor");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editVendorId, setEditVendorId] = useState("");
+  const [editGodownId, setEditGodownId] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const [role, setRole] = useState("vendor");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [vendorId, setVendorId] = useState(null);
+  const [godownId, setGodownId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const vendorOptions = useMemo(() => vendors || [], [vendors]);
@@ -80,7 +90,12 @@ export function AdminDashboard() {
       setVendors(Array.isArray(vendorsJson.vendors) ? vendorsJson.vendors : []);
       setAudit(Array.isArray(auditJson.audit) ? auditJson.audit : []);
     } catch (err) {
-      toast.error(err.message || "Failed to load admin portal");
+      const message = err?.message || "Failed to load admin portal";
+      if (devAdminBypass && String(message).toLowerCase().includes("dev admin bypass")) {
+        toast.error("Admin bypass is OFF on backend. Set ENABLE_DEV_ADMIN_BYPASS=true (dev) or login as an admin user.");
+      } else {
+        toast.error(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -96,6 +111,94 @@ export function AdminDashboard() {
     if (role !== "vendor") setVendorId(null);
   }, [role]);
 
+  useEffect(() => {
+    if (role !== "godam") setGodownId("");
+  }, [role]);
+
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    setEditRole(p.role || "vendor");
+    setEditEmail(p.email || "");
+    setEditPhone(p.phone || "");
+    setEditVendorId(p.vendor_id || "");
+    setEditGodownId(p.godown_id || "");
+    setEditPassword("");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditPassword("");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!authHeaders || !editingId) return;
+
+    const payload = {
+      role: editRole,
+      email: editEmail.trim() || undefined,
+      phone: editPhone.trim() || undefined,
+      vendor_id: editRole === "vendor" ? (editVendorId || undefined) : undefined,
+      godown_id: editRole === "godam" ? (editGodownId.trim() || undefined) : undefined,
+      password: editPassword ? editPassword : undefined,
+    };
+
+    if (payload.password && payload.password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+
+    if (!payload.email && !payload.phone) {
+      toast.error("Provide email or phone");
+      return;
+    }
+
+    if (editRole === "vendor" && !payload.vendor_id) {
+      toast.error("Select vendor");
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`${API}/api/admin/users/${editingId}`, {
+        method: "PATCH",
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to update user");
+
+      toast.success("User updated");
+      setEditingId(null);
+      setEditPassword("");
+      await loadAll();
+    } catch (err) {
+      toast.error(err.message || "Update failed");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!authHeaders) return;
+    const ok = window.confirm("Delete this user? This will remove login + profile.");
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`${API}/api/admin/users/${userId}`, {
+        method: "DELETE",
+        headers: authHeaders,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Failed to delete user");
+      toast.success("User deleted");
+      if (editingId === userId) setEditingId(null);
+      await loadAll();
+    } catch (err) {
+      toast.error(err.message || "Delete failed");
+    }
+  };
+
   const handleCreateUser = async () => {
     if (!authHeaders) return;
 
@@ -105,6 +208,7 @@ export function AdminDashboard() {
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
       vendor_id: role === "vendor" ? vendorId : undefined,
+      godown_id: role === "godam" ? (godownId.trim() || undefined) : undefined,
     };
 
     if (!payload.password || payload.password.length < 8) {
@@ -119,6 +223,11 @@ export function AdminDashboard() {
 
     if (role === "vendor" && !payload.vendor_id) {
       toast.error("Select vendor");
+      return;
+    }
+
+    if (role === "godam" && payload.vendor_id) {
+      toast.error("Godam user cannot have vendor");
       return;
     }
 
@@ -138,6 +247,7 @@ export function AdminDashboard() {
       setPhone("");
       setPassword("");
       setVendorId(null);
+      setGodownId("");
 
       await loadAll();
       setActiveTab("users");
@@ -188,7 +298,9 @@ export function AdminDashboard() {
                         <th className="py-2 pr-3">Role</th>
                         <th className="py-2 pr-3">Email</th>
                         <th className="py-2 pr-3">Phone</th>
+                        <th className="py-2 pr-3">Godown</th>
                         <th className="py-2">Vendor</th>
+                        <th className="py-2 pl-3">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -201,17 +313,108 @@ export function AdminDashboard() {
                       ) : (
                         profiles.map((p) => (
                           <tr key={p.id} className="border-b border-gray-100 align-top">
-                            <td className="py-2 pr-3">{String(p.role || "").toUpperCase()}</td>
-                            <td className="py-2 pr-3">{p.email || "-"}</td>
-                            <td className="py-2 pr-3">{p.phone || "-"}</td>
+                            <td className="py-2 pr-3">
+                              {editingId === p.id ? (
+                                <Select value={editRole} onValueChange={setEditRole}>
+                                  <SelectTrigger className="h-8">
+                                    <SelectValue placeholder="Role" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="vendor">Vendor</SelectItem>
+                                    <SelectItem value="godam">Godam</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                String(p.role || "").toUpperCase()
+                              )}
+                            </td>
+                            <td className="py-2 pr-3">
+                              {editingId === p.id ? (
+                                <Input className="h-8" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+                              ) : (
+                                p.email || "-"
+                              )}
+                            </td>
+                            <td className="py-2 pr-3">
+                              {editingId === p.id ? (
+                                <Input className="h-8" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+                              ) : (
+                                p.phone || "-"
+                              )}
+                            </td>
+                            <td className="py-2 pr-3">
+                              {editingId === p.id ? (
+                                <Input
+                                  className="h-8"
+                                  value={editGodownId}
+                                  onChange={(e) => setEditGodownId(e.target.value)}
+                                  placeholder="godown uuid"
+                                  disabled={editRole !== "godam"}
+                                />
+                              ) : (
+                                p.godown_id || "-"
+                              )}
+                            </td>
                             <td className="py-2">
-                              {p.vendor_name ? `${p.vendor_name} (${p.vendor_type || ""})` : "-"}
+                              {editingId === p.id ? (
+                                <Select
+                                  value={editVendorId ? String(editVendorId) : ""}
+                                  onValueChange={(v) => setEditVendorId(String(v))}
+                                >
+                                  <SelectTrigger className="h-8" disabled={editRole !== "vendor"}>
+                                    <SelectValue placeholder="Vendor" />
+                                  </SelectTrigger>
+                                  <SelectContent className="max-h-60 overflow-y-auto">
+                                    {vendorOptions.map((v) => (
+                                      <SelectItem key={String(v.vendor_id)} value={String(v.vendor_id)}>
+                                        {v.vendor_name} ({v.vendor_type})
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                p.vendor_name ? `${p.vendor_name} (${p.vendor_type || ""})` : "-"
+                              )}
+                            </td>
+                            <td className="py-2 pl-3 whitespace-nowrap">
+                              {editingId === p.id ? (
+                                <div className="flex gap-2">
+                                  <Button size="sm" onClick={handleSaveEdit} disabled={savingEdit}>
+                                    {savingEdit ? "Saving..." : "Save"}
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={cancelEdit}>
+                                    Cancel
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <Button size="sm" variant="outline" onClick={() => startEdit(p)}>
+                                    Edit
+                                  </Button>
+                                  <Button size="sm" variant="destructive" onClick={() => handleDeleteUser(p.id)}>
+                                    Delete
+                                  </Button>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         ))
                       )}
                     </tbody>
                   </table>
+
+                  {editingId ? (
+                    <div className="mt-3">
+                      <div className="text-xs text-gray-600 mb-1">Reset Password (optional)</div>
+                      <Input
+                        value={editPassword}
+                        onChange={(e) => setEditPassword(e.target.value)}
+                        placeholder="minimum 8 characters"
+                        type="password"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>
@@ -232,7 +435,7 @@ export function AdminDashboard() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="vendor">Vendor</SelectItem>
-                        <SelectItem value="owner">Owner</SelectItem>
+                        <SelectItem value="godam">Godam</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
                     </Select>
@@ -241,18 +444,28 @@ export function AdminDashboard() {
                   {role === "vendor" ? (
                     <div className="space-y-1">
                       <div className="text-xs text-gray-600">Vendor</div>
-                      <Select value={vendorId || ""} onValueChange={setVendorId}>
+                      <Select
+                        value={vendorId ? String(vendorId) : ""}
+                        onValueChange={(v) => setVendorId(String(v))}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select vendor" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           {vendorOptions.map((v) => (
-                            <SelectItem key={v.vendor_id} value={v.vendor_id}>
+                            <SelectItem key={String(v.vendor_id)} value={String(v.vendor_id)}>
                               {v.vendor_name} ({v.vendor_type})
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                  ) : null}
+
+                  {role === "godam" ? (
+                    <div className="space-y-1">
+                      <div className="text-xs text-gray-600">Godown (optional)</div>
+                      <Input value={godownId} onChange={(e) => setGodownId(e.target.value)} placeholder="godown uuid" />
                     </div>
                   ) : null}
                 </div>

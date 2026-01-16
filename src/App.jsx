@@ -13,10 +13,13 @@ import { DataProvider } from "./utils/dataContext";
 import { PageRefreshProvider } from "./utils/pageRefreshContext";
 
 function AppContent() {
-  const { role, loading, isAuthenticated, enableDevAdminBypass, disableDevAdminBypass } = useAuth();
+  const { role, loading, isAuthenticated, disableDevAdminBypass } = useAuth();
 
   // Always show Welcome first (no persistence).
   const [welcomeDone, setWelcomeDone] = useState(false);
+
+  // If user clicked "Admin Login" on Welcome, force admin-only login.
+  const [loginMode, setLoginMode] = useState("user");
 
   const [activeSection, setActiveSection] = useState("dashboard");
 
@@ -25,10 +28,14 @@ function AppContent() {
       <Welcome
         onContinue={() => {
           disableDevAdminBypass();
+          setLoginMode("user");
           setWelcomeDone(true);
         }}
         onAdminLogin={() => {
-          enableDevAdminBypass();
+          // Admin portal should be protected by real credentials.
+          // Ensure any old dev-bypass is disabled.
+          disableDevAdminBypass();
+          setLoginMode("admin");
           setWelcomeDone(true);
         }}
       />
@@ -38,7 +45,7 @@ function AppContent() {
   if (loading) return null;
 
   if (!isAuthenticated) {
-    return <Login />;
+    return <Login expectedRole={loginMode === "admin" ? "admin" : null} />;
   }
 
   if (role === "vendor") {

@@ -44,7 +44,7 @@ import {
 } from "lucide-react";
 import { formatINR } from "../../utils/currencyFormat";
 import { useAuth } from "../../utils/authContext";
-import { getApiBaseUrl, getApiBaseUrlCandidates, normalizeBaseUrl } from "../../utils/apiBaseUrl";
+import { getApiBaseUrl, getApiBaseUrlCandidates, normalizeBaseUrl, setStoredApiBaseUrl } from "../../utils/apiBaseUrl";
 import { usePageRefresh } from "../../utils/pageRefreshContext";
 
 const COMPANY_ID_DEFAULT = "2f762c5e-5274-4a65-aa66-15a7642a1608";
@@ -206,11 +206,13 @@ export default function DashboardOverview() {
   const saveApiBase = async () => {
     const next = normalizeBaseUrl(apiDraft);
     if (!next) return;
+    setStoredApiBaseUrl(next);
     setApiBase(next);
     await fetchOverview();
   };
 
   const resetApiBase = async () => {
+    setStoredApiBaseUrl("");
     const next = getApiBaseUrl();
     setApiBase(next);
     setApiDraft(next);

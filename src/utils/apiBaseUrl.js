@@ -1,4 +1,5 @@
-const LOCALHOST_API = "http://localhost:5000";
+// Default backend API base. This project is configured to use Render.
+const LOCALHOST_API = "https://gd-10-0-backend-1.onrender.com";
 const STORAGE_KEY_API_BASE = "scrapco_api_base_url";
 
 export function getStoredApiBaseUrl() {
@@ -50,6 +51,11 @@ export function getApiBaseUrl() {
   );
   if (env) return env;
 
+  // If a default base URL is configured, prefer it even on localhost.
+  // This avoids vendor/admin pages accidentally trying http://localhost:5000.
+  const configuredDefault = normalizeBaseUrl(LOCALHOST_API);
+  if (configuredDefault) return configuredDefault;
+
   // For local dev without env vars
   const localCandidate = normalizeBaseUrl(getLocalCandidateBaseUrl());
   if (localCandidate) return localCandidate;
@@ -76,6 +82,7 @@ export function getApiBaseUrlCandidates(preferredBaseUrl = "") {
       ) ?? ""
     ),
     normalizeBaseUrl(preferredBaseUrl),
+    normalizeBaseUrl(LOCALHOST_API),
     normalizeBaseUrl(getLocalCandidateBaseUrl()),
     "",
     LOCALHOST_API,

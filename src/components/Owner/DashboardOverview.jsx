@@ -263,7 +263,7 @@ export default function DashboardOverview() {
                 <Input
                   value={apiDraft}
                   onChange={(e) => setApiDraft(e.target.value)}
-                  placeholder="http://localhost:5000"
+                  placeholder="https://gd-10-0-backend-1.onrender.com"
                 />
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={saveApiBase} disabled={loading}>
@@ -610,7 +610,7 @@ export default function DashboardOverview() {
                           <Input
                             value={apiDraft}
                             onChange={(e) => setApiDraft(e.target.value)}
-                            placeholder="http://localhost:5000"
+                            placeholder="https://gd-10-0-backend-1.onrender.com"
                           />
                           <div className="flex gap-2">
                             <Button variant="outline" onClick={saveApiBase} disabled={loading}>

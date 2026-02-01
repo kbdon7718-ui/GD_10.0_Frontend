@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 import { useAuth } from "../../utils/authContext";
+import PickupList from "./pickup/PickupList";
+import PickupMap from "./pickup/PickupMap";
 
 const COMPANY_ID_DEFAULT = "2f762c5e-5274-4a65-aa66-15a7642a1608";
 const GODOWN_ID_DEFAULT = "fbf61954-4d32-4cb4-92ea-d0fe3be01311";
@@ -165,6 +167,24 @@ export function VendorDashboard() {
           </CardHeader>
         </Card>
 
+        {activeTab === "pickup" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Nearby Pickup Requests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                  <PickupList vendorId={vendor.vendor_id || vendor.id} />
+                </div>
+                <div>
+                  <PickupMap vendorId={vendor.vendor_id || vendor.id} initialCenter={null} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         {activeTab === "sale" ? (
           <Card>
             <CardHeader>
@@ -276,6 +296,12 @@ export function VendorDashboard() {
             onClick={() => setActiveTab("sale")}
             icon={<BookOpen className="h-5 w-5" />}
             label="Sale"
+          />
+          <NavBtn
+            active={activeTab === "pickup"}
+            onClick={() => setActiveTab("pickup")}
+            icon={<BadgePercent className="h-5 w-5" />}
+            label="Pickup"
           />
 
           <NavBtn

@@ -6,7 +6,6 @@ import {
   CardHeader,
   CardTitle,
 } from "../ui/card";
-import OwnerDailySummary from "./OwnerDailySummary";
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,12 +14,10 @@ import {
   YAxis,
   Tooltip,
   Legend,
-  LineChart,
-  Line,
   PieChart,
   Pie,
-  Cell
-} from 'recharts';
+  Cell,
+} from "recharts";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import {
@@ -38,6 +35,7 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   LogOut,
+  RefreshCcw,
   Truck,
   Users,
   Store,
@@ -88,48 +86,8 @@ export default function DashboardOverview() {
   // New state for time filter
   const [timeFilter, setTimeFilter] = useState('today');
 
-  // KPI and chart data variables
-  let profit = 0, cash = 0, expense = 0, bank = 0, truck = 0, labour = 0, feriwala = 0, kabadiwala = 0;
-  let maalBarData = [], scrapFlowData = [], expensePieData = [], expensePieColors = ['#f87171','#fbbf24','#34d399','#60a5fa','#a78bfa','#f472b6','#facc15'], expenseTableData = [];
-  let activityTableData = [], scrapCategoryData = [], scrapCategoryColors = ['#4ade80','#60a5fa','#fbbf24','#f472b6','#a78bfa'];
-  if (data) {
-    const analytics = data.analytics || data;
-    const tf = timeFilter === 'today' ? 'today' : timeFilter === 'month' ? 'month' : 'all_time';
-    // Profit: sales - purchase - expenses
-    const sales = Number(analytics?.sales?.[tf] ?? 0);
-    const purchase = Number(analytics?.purchase?.[tf] ?? 0);
-    expense = Number(analytics?.expenses?.[tf] ?? 0);
-    profit = sales - purchase - expense;
-    // Cash/Bank
-    cash = Number(analytics?.cash?.rokadi ?? 0);
-    bank = Number(analytics?.cash?.bank ?? 0);
-    // Maal In/Out bar chart
-    maalBarData = [
-      { name: 'Purchase', value: purchase },
-      { name: 'Sales', value: sales },
-      { name: 'Expenses', value: expense },
-      { name: 'Profit', value: profit },
-    ];
-    // Scrap flow line chart (trend)
-    scrapFlowData = (analytics?.scrap_flow ?? []).map(d => ({ date: d.date, scrapIn: d.in, scrapOut: d.out }));
-    // Expense pie chart
-    expensePieData = (analytics?.expense_pie ?? []).map(e => ({ category: e.category, value: e.value }));
-    // Expense table
-    expenseTableData = (analytics?.expense_summary ?? []).map(e => ({ category: e.category, payments: e.payments, total: Number(e.total) }));
-    // Activity summary
-    truck = Number(analytics?.truck?.[tf] ?? 0);
-    labour = Number(analytics?.labour?.[tf] ?? 0);
-    feriwala = Number(analytics?.feriwala?.[tf] ?? 0);
-    kabadiwala = Number(analytics?.kabadiwala?.[tf] ?? 0);
-    activityTableData = [
-      { activity: 'Truck', today: analytics?.truck?.today ?? 0, month: analytics?.truck?.month ?? 0, all: analytics?.truck?.all_time ?? 0 },
-      { activity: 'Labour', today: analytics?.labour?.today ?? 0, month: analytics?.labour?.month ?? 0, all: analytics?.labour?.all_time ?? 0 },
-      { activity: 'Feriwala', today: analytics?.feriwala?.today ?? 0, month: analytics?.feriwala?.month ?? 0, all: analytics?.feriwala?.all_time ?? 0 },
-      { activity: 'Kabadiwala', today: analytics?.kabadiwala?.today ?? 0, month: analytics?.kabadiwala?.month ?? 0, all: analytics?.kabadiwala?.all_time ?? 0 },
-    ];
-    // Scrap category pie
-    scrapCategoryData = (analytics?.scrap_by_material ?? []).map(m => ({ category: m.material, value: m.weight }));
-  }
+  const tfKey = timeFilter === 'today' ? 'today' : timeFilter === 'month' ? 'month' : 'all_time';
+  const tfLabel = timeFilter === 'today' ? 'Today' : timeFilter === 'month' ? 'This Month' : 'All Time';
 
   const companyId =
     (typeof window !== "undefined" &&
@@ -243,8 +201,17 @@ export default function DashboardOverview() {
 
       {/* ================= LOADING ================= */}
       {loading && (
-        <div className="flex justify-center py-16">
-          <p className="text-gray-500 text-sm">Loading dashboard…</p>
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="h-9 w-64 bg-gray-200 rounded animate-pulse" />
+            <div className="h-9 w-28 bg-gray-200 rounded animate-pulse" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {Array.from({ length: 5 }).map((_, idx) => (
+              <div key={idx} className="h-24 bg-gray-200 rounded animate-pulse" />
+            ))}
+          </div>
+          <div className="h-64 bg-gray-200 rounded animate-pulse" />
         </div>
       )}
 
@@ -284,77 +251,29 @@ export default function DashboardOverview() {
       {/* ================= DASHBOARD ================= */}
       {!loading && !error && data && (
         <>
-          {/* ========== TIME FILTER ========== */}
-          <div className="mb-4 flex gap-2">
-            {['today', 'month', 'all'].map((period) => (
-              <button
-                key={period}
-                className={`px-3 py-1 rounded-full border text-xs font-semibold ${timeFilter === period ? 'bg-emerald-600 text-white' : 'bg-white text-gray-700'}`}
-                onClick={() => setTimeFilter(period)}
-              >
-                {period === 'today' ? 'Today' : period === 'month' ? 'This Month' : 'All Time'}
-              </button>
-            ))}
-          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              {['today', 'month', 'all'].map((period) => (
+                <button
+                  key={period}
+                  className={`px-3 py-1 rounded-full border text-xs font-semibold ${timeFilter === period ? 'bg-emerald-600 text-white' : 'bg-white text-gray-700'}`}
+                  onClick={() => setTimeFilter(period)}
+                >
+                  {period === 'today' ? 'Today' : period === 'month' ? 'This Month' : 'All Time'}
+                </button>
+              ))}
 
-          {/* ========== KPI CARDS ========== */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            {/* Profit KPI */}
-            <Card className="text-center">
-              <CardHeader>
-                <CardTitle>Profit</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className={`text-3xl font-bold ${profit > 0 ? 'text-green-600' : profit < 0 ? 'text-red-600' : 'text-gray-500'}`}>₹{profit.toLocaleString()}</div>
-                <div className="text-xs mt-1">{profit > 0 ? 'Profit' : profit < 0 ? 'Loss' : 'Neutral'}</div>
-              </CardContent>
-            </Card>
-            {/* Cash KPI */}
-            <Card className="text-center">
-              <CardHeader>
-                <CardTitle>Cash</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">₹{cash.toLocaleString()}</div>
-                <div className="text-xs mt-1">{timeFilter === 'today' ? 'Today' : timeFilter === 'month' ? 'This Month' : 'All Time'}</div>
-              </CardContent>
-            </Card>
-            {/* Expense KPI */}
-            <Card className="text-center">
-              <CardHeader>
-                <CardTitle>Expense</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-red-600">₹{expense.toLocaleString()}</div>
-                <div className="text-xs mt-1">{timeFilter === 'today' ? 'Today' : timeFilter === 'month' ? 'This Month' : 'All Time'}</div>
-              </CardContent>
-            </Card>
-          </div>
+              <Badge variant="outline" className="text-xs">View: {tfLabel}</Badge>
+              {apiBase ? <Badge variant="outline" className="text-xs">API: {apiBase}</Badge> : null}
+            </div>
 
-          {/* ========== MAAL IN VS OUT BAR CHART ========== */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Maal In vs Out (Bar Chart)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={maalBarData}>
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#8884d8" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-gray-500">
-              {lastUpdated ? `Last updated: ${lastUpdated.toLocaleString()}` : ""}
-            </p>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">Today</Badge>
-              <Badge variant="outline" className="text-xs">This Month</Badge>
-              <Badge variant="outline" className="text-xs">All Time</Badge>
+              {lastUpdated ? (
+                <span className="text-xs text-gray-500">Updated: {lastUpdated.toLocaleString()}</span>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={fetchOverview}>
+                <RefreshCcw className="h-4 w-4 mr-1" /> Refresh
+              </Button>
             </div>
           </div>
 
@@ -404,13 +323,57 @@ export default function DashboardOverview() {
             const labourMonth = toNum(analytics?.labour?.month);
             const labourAll = toNum(analytics?.labour?.all_time);
 
+            const pickTf = (obj) => {
+              if (!obj) return 0;
+              if (tfKey === 'today') return toNum(obj.today ?? obj.nd);
+              if (tfKey === 'month') return toNum(obj.month ?? obj.mo);
+              return toNum(obj.all_time);
+            };
+
+            const scrapInTF = pickTf(analytics?.scrap_in);
+            const scrapOutTF = pickTf(analytics?.scrap_out);
+            const expenseTF = pickTf(analytics?.expenses);
+            const truckTF = pickTf(analytics?.truck);
+            const labourTF = pickTf(analytics?.labour);
+            const feriwalaTF = pickTf(analytics?.feriwala);
+            const kabadiwalaTF = pickTf(analytics?.kabadiwala);
+
             const expenseSummary = Array.isArray(analytics?.expense_summary)
               ? analytics.expense_summary
               : (Array.isArray(data?.expense_summary) ? data.expense_summary : []);
 
-            const scrapByMaterial = Array.isArray(analytics?.scrap_by_material)
+            const scrapByMaterialToday = Array.isArray(analytics?.scrap_by_material)
               ? analytics.scrap_by_material
               : (Array.isArray(data?.scrap_by_material) ? data.scrap_by_material : []);
+
+            const scrapByMaterialMonth = Array.isArray(analytics?.scrap_by_material_month)
+              ? analytics.scrap_by_material_month
+              : [];
+
+            const scrapByMaterialAll = Array.isArray(analytics?.scrap_by_material_all_time)
+              ? analytics.scrap_by_material_all_time
+              : [];
+
+            const scrapBySourceToday = Array.isArray(analytics?.scrap_by_source_today)
+              ? analytics.scrap_by_source_today
+              : [];
+
+            const scrapBySourceMonth = Array.isArray(analytics?.scrap_by_source_month)
+              ? analytics.scrap_by_source_month
+              : [];
+
+            const scrapBySourceAll = Array.isArray(analytics?.scrap_by_source_all_time)
+              ? analytics.scrap_by_source_all_time
+              : [];
+
+            const pickListTf = (todayList, monthList, allList) => {
+              if (tfKey === 'today') return Array.isArray(todayList) ? todayList : [];
+              if (tfKey === 'month') return Array.isArray(monthList) && monthList.length ? monthList : (Array.isArray(todayList) ? todayList : []);
+              return Array.isArray(allList) && allList.length ? allList : (Array.isArray(todayList) ? todayList : []);
+            };
+
+            const scrapByMaterialTF = pickListTf(scrapByMaterialToday, scrapByMaterialMonth, scrapByMaterialAll);
+            const scrapBySourceTF = pickListTf(scrapBySourceToday, scrapBySourceMonth, scrapBySourceAll);
 
             return (
               <>
@@ -420,7 +383,7 @@ export default function DashboardOverview() {
                     title="Scrap In"
                     icon={ArrowDownCircle}
                     className="border-green-200"
-                    value={formatKg(scrapInMonth)}
+                    value={formatKg(scrapInTF)}
                     items={[
                       { label: "Today", value: formatKg(scrapInToday) },
                       { label: "MTD", value: formatKg(scrapInMonth) },
@@ -432,7 +395,7 @@ export default function DashboardOverview() {
                     title="Scrap Out"
                     icon={ArrowUpCircle}
                     className="border-blue-200"
-                    value={formatKg(scrapOutMonth)}
+                    value={formatKg(scrapOutTF)}
                     items={[
                       { label: "Today", value: formatKg(scrapOutToday) },
                       { label: "MTD", value: formatKg(scrapOutMonth) },
@@ -444,7 +407,7 @@ export default function DashboardOverview() {
                     title="Expenses"
                     icon={Wallet}
                     className="border-red-200"
-                    value={formatINR(expenseMonth)}
+                    value={formatINR(expenseTF)}
                     items={[
                       { label: "Today", value: formatINR(expenseToday) },
                       { label: "MTD", value: formatINR(expenseMonth) },
@@ -468,6 +431,228 @@ export default function DashboardOverview() {
                     items={[{ label: "Total", value: formatINR(bankTotal) }]}
                   />
                 </div>
+
+                {/* ================= GRAPHS ================= */}
+                {(() => {
+                  const expenseChartData = (expenseSummary || []).map((e) => ({
+                    name: String(e.category || "—"),
+                    total: toNum(e.total),
+                    payments: toNum(e.payments),
+                  }));
+
+                  const scrapFlowData = [
+                    { period: "Today", in: scrapInToday, out: scrapOutToday },
+                    { period: "MTD", in: scrapInMonth, out: scrapOutMonth },
+                    { period: "All", in: scrapInAll, out: scrapOutAll },
+                  ];
+
+                  const cashBankPie = [
+                    { name: "Cash", value: cashRokadi },
+                    { name: "Bank", value: bankTotal },
+                  ].filter((x) => toNum(x.value) > 0);
+
+                  const activityChartData = [
+                    { name: "Truck", count: truckTF },
+                    { name: "Labour", count: labourTF },
+                    { name: "Feriwala", count: feriwalaTF },
+                    { name: "Kabadiwala", count: kabadiwalaTF },
+                  ];
+
+                  const scrapPieData = (scrapByMaterialTF || [])
+                    .map((m) => ({
+                      name: String(m.material || "—"),
+                      value: toNum(m.weight),
+                    }))
+                    .filter((x) => x.value > 0);
+
+                  const scrapSourceData = (scrapBySourceTF || [])
+                    .map((s) => ({
+                      name: String(s.source || "unknown"),
+                      value: toNum(s.weight),
+                    }))
+                    .filter((x) => x.value > 0);
+
+                  const PIE_COLORS = [
+                    "#10b981",
+                    "#3b82f6",
+                    "#f59e0b",
+                    "#ef4444",
+                    "#8b5cf6",
+                    "#14b8a6",
+                    "#f97316",
+                    "#06b6d4",
+                  ];
+
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                      <Card className="lg:col-span-2">
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <CardTitle className="text-base sm:text-lg">Scrap Flow (In vs Out)</CardTitle>
+                          <Badge variant="outline" className="text-xs">Today / MTD / All</Badge>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={scrapFlowData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                                <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                                <YAxis tick={{ fontSize: 11 }} />
+                                <Tooltip formatter={(v) => `${toNum(v).toFixed(2)} kg`} />
+                                <Legend wrapperStyle={{ fontSize: 12 }} />
+                                <Bar name="In" dataKey="in" fill="#10b981" radius={[6, 6, 0, 0]} />
+                                <Bar name="Out" dataKey="out" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <CardTitle className="text-base sm:text-lg">Cash vs Bank</CardTitle>
+                          <Badge variant="outline" className="text-xs">Now</Badge>
+                        </CardHeader>
+                        <CardContent>
+                          {cashBankPie.length === 0 ? (
+                            <p className="text-sm text-gray-500">No cash/bank data</p>
+                          ) : (
+                            <div className="h-64">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Tooltip formatter={(v) => formatINR(v)} />
+                                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                                  <Pie
+                                    data={cashBankPie}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%"
+                                    cy="50%"
+                                    outerRadius={95}
+                                    innerRadius={55}
+                                    paddingAngle={2}
+                                  >
+                                    {cashBankPie.map((_, idx) => (
+                                      <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                                    ))}
+                                  </Pie>
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card className="lg:col-span-2">
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <CardTitle className="text-base sm:text-lg">Expenses by Category</CardTitle>
+                          <Badge variant="outline" className="text-xs">This Month</Badge>
+                        </CardHeader>
+                        <CardContent>
+                          {expenseChartData.length === 0 ? (
+                            <p className="text-sm text-gray-500">No expense data</p>
+                          ) : (
+                            <div className="h-64">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                  data={expenseChartData}
+                                  margin={{ top: 8, right: 8, bottom: 18, left: 8 }}
+                                >
+                                  <XAxis
+                                    dataKey="name"
+                                    interval={0}
+                                    tick={{ fontSize: 11 }}
+                                    tickFormatter={(v) => String(v).slice(0, 10)}
+                                  />
+                                  <YAxis tick={{ fontSize: 11 }} />
+                                  <Tooltip formatter={(v) => formatINR(v)} />
+                                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                                  <Bar name="Total" dataKey="total" fill="#ef4444" radius={[6, 6, 0, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <CardTitle className="text-base sm:text-lg">Activity</CardTitle>
+                          <Badge variant="outline" className="text-xs">{tfLabel}</Badge>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={activityChartData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                                <Tooltip />
+                                <Bar name="Count" dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="lg:col-span-3">
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <CardTitle className="text-base sm:text-lg">Scrap In by Material</CardTitle>
+                          <Badge variant="outline" className="text-xs">{tfLabel}</Badge>
+                        </CardHeader>
+                        <CardContent>
+                          {scrapPieData.length === 0 ? (
+                            <p className="text-sm text-gray-500">No scrap received</p>
+                          ) : (
+                            <div className="h-72">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Tooltip formatter={(v) => `${toNum(v).toFixed(2)} kg`} />
+                                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                                  <Pie
+                                    data={scrapPieData}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%"
+                                    cy="50%"
+                                    outerRadius={110}
+                                    innerRadius={55}
+                                    paddingAngle={2}
+                                  >
+                                    {scrapPieData.map((_, idx) => (
+                                      <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                                    ))}
+                                  </Pie>
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card className="lg:col-span-3">
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <CardTitle className="text-base sm:text-lg">Scrap In by Vendor Type</CardTitle>
+                          <Badge variant="outline" className="text-xs">{tfLabel}</Badge>
+                        </CardHeader>
+                        <CardContent>
+                          {scrapSourceData.length === 0 ? (
+                            <p className="text-sm text-gray-500">No vendor-type data</p>
+                          ) : (
+                            <div className="h-64">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={scrapSourceData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                                  <YAxis tick={{ fontSize: 11 }} />
+                                  <Tooltip formatter={(v) => `${toNum(v).toFixed(2)} kg`} />
+                                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                                  <Bar name="Weight (kg)" dataKey="value" fill="#06b6d4" radius={[6, 6, 0, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  );
+                })()}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                   <Card className="lg:col-span-2">
@@ -518,7 +703,7 @@ export default function DashboardOverview() {
                           title="Truck"
                           icon={Truck}
                           className="border"
-                          value={formatCount(truckMonth)}
+                          value={formatCount(truckTF)}
                           items={[
                             { label: "Today", value: formatCount(truckToday) },
                             { label: "MTD", value: formatCount(truckMonth) },
@@ -529,7 +714,7 @@ export default function DashboardOverview() {
                           title="Labour"
                           icon={Users}
                           className="border"
-                          value={formatCount(labourMonth)}
+                          value={formatCount(labourTF)}
                           items={[
                             { label: "Today", value: formatCount(labourToday) },
                             { label: "MTD", value: formatCount(labourMonth) },
@@ -540,7 +725,7 @@ export default function DashboardOverview() {
                           title="Feriwala"
                           icon={Store}
                           className="border"
-                          value={formatCount(feriwalaMonth)}
+                          value={formatCount(feriwalaTF)}
                           items={[
                             { label: "Today", value: formatCount(feriwalaToday) },
                             { label: "MTD", value: formatCount(feriwalaMonth) },
@@ -551,7 +736,7 @@ export default function DashboardOverview() {
                           title="Kabadiwala"
                           icon={Store}
                           className="border"
-                          value={formatCount(kabadiwalaMonth)}
+                          value={formatCount(kabadiwalaTF)}
                           items={[
                             { label: "Today", value: formatCount(kabadiwalaToday) },
                             { label: "MTD", value: formatCount(kabadiwalaMonth) },
@@ -565,12 +750,12 @@ export default function DashboardOverview() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base sm:text-lg">Scrap In by Category (Today)</CardTitle>
+                    <CardTitle className="text-base sm:text-lg">Scrap In by Category ({tfLabel})</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {scrapByMaterial.length === 0 ? (
+                    {scrapByMaterialTF.length === 0 ? (
                       <p className="text-sm text-gray-500">
-                        No scrap received today
+                        No scrap received
                       </p>
                     ) : (
                       <Table>
@@ -581,7 +766,7 @@ export default function DashboardOverview() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {scrapByMaterial.map((m) => (
+                          {scrapByMaterialTF.map((m) => (
                             <TableRow key={m.material}>
                               <TableCell className="font-medium">{m.material || "—"}</TableCell>
                               <TableCell className="text-right">{formatKg(m.weight)}</TableCell>

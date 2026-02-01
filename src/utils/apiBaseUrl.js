@@ -1,5 +1,6 @@
-// Default backend API base. This project is configured to use Render.
-const LOCALHOST_API = "https://gd-10-0-backend-1.onrender.com";
+// Default backend API base.
+// For local development, prefer the local backend (this repo's backend defaults to port 3000).
+const LOCALHOST_API = "http://localhost:3000";
 const STORAGE_KEY_API_BASE = "scrapco_api_base_url";
 
 export function getStoredApiBaseUrl() {
@@ -44,9 +45,9 @@ export function getApiBaseUrl() {
 
   const env = normalizeBaseUrl(
     (
-      import.meta?.env?.VITE_API_URL ||
-      import.meta?.env?.REACT_APP_API_URL ||
-      import.meta?.env?.REACT_APP_API_BASE_URL
+      import.meta.env.VITE_API_URL ||
+      import.meta.env.REACT_APP_API_URL ||
+      import.meta.env.REACT_APP_API_BASE_URL
     ) ?? ""
   );
   if (env) return env;
@@ -76,9 +77,9 @@ export function getApiBaseUrlCandidates(preferredBaseUrl = "") {
     getStoredApiBaseUrl(),
     normalizeBaseUrl(
       (
-        import.meta?.env?.VITE_API_URL ||
-        import.meta?.env?.REACT_APP_API_URL ||
-        import.meta?.env?.REACT_APP_API_BASE_URL
+        import.meta.env.VITE_API_URL ||
+        import.meta.env.REACT_APP_API_URL ||
+        import.meta.env.REACT_APP_API_BASE_URL
       ) ?? ""
     ),
     normalizeBaseUrl(preferredBaseUrl),

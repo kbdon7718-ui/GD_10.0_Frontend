@@ -2,7 +2,6 @@ import React from "react";
 
 import { Card } from "../../ui/card";
 import { Badge } from "../../ui/badge";
-import { Switch } from "../../ui/switch";
 
 function statusCopy({ mode, online }) {
   if (!online) return { title: "Offline", sub: "Connect to the internet to receive offers and take actions." };
@@ -21,9 +20,7 @@ export default function VendorPickupHeader({
   mode,
   online,
   sseStatus,
-  available,
   activeCount,
-  onToggleAvailable,
 }) {
   const copy = statusCopy({ mode, online });
   const badge = sseBadge(sseStatus);
@@ -40,20 +37,7 @@ export default function VendorPickupHeader({
           <p className="mt-1 text-xs text-gray-600">{copy.sub}</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="text-right">
-            <div className="text-xs text-gray-500">Availability</div>
-            <div className={`text-sm font-semibold ${available ? "text-emerald-700" : "text-red-700"}`}>
-              {available ? "Available" : "Not available"}
-            </div>
-          </div>
-          <Switch
-            checked={!!available}
-            onCheckedChange={(v) => onToggleAvailable?.(!!v)}
-            disabled={!online}
-            aria-label="Toggle availability"
-          />
-        </div>
+        <div />
       </div>
     </Card>
   );

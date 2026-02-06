@@ -74,15 +74,6 @@ export default function PickupMap({ vendorId, initialCenter }) {
   const [selectedPickupId, setSelectedPickupId] = useState(null);
   const [pickupHistory, setPickupHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [available, setAvailable] = useState(() => {
-    try {
-      const raw = window.localStorage.getItem('scrapco_vendor_available');
-      if (raw == null) return true;
-      return String(raw).toLowerCase() === 'true';
-    } catch (_e) {
-      return true;
-    }
-  });
   const [sseStatus, setSseStatus] = useState('connecting');
   const sentDiscoverabilityRef = useRef(false);
   const currentOfferMarkerRef = useRef(null);
@@ -112,15 +103,6 @@ export default function PickupMap({ vendorId, initialCenter }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignedPickups]);
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('scrapco_vendor_available', String(available));
-    } catch (_e) {}
-
-    if (!available) {
-      setCurrentOffer(null);
-    }
-  }, [available]);
   // Vite exposes env vars as import.meta.env and expects `VITE_` prefix.
   const KEY =
     import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
@@ -131,7 +113,9 @@ export default function PickupMap({ vendorId, initialCenter }) {
   const API_BASE = getApiBaseUrl();
 
   const BILLING_ENABLED = String(import.meta.env.VITE_BILLING_ENABLED ?? 'true').toLowerCase() === 'true';
-  const MAP_ENABLED = BILLING_ENABLED && !!KEY;
+  // Embedded Google Map is optional. Keep it OFF by default to avoid production map/billing/referrer errors.
+  const MAP_OPT_IN = String(import.meta.env.VITE_MAPS_ENABLED ?? 'false').toLowerCase() === 'true';
+  const MAP_ENABLED = MAP_OPT_IN && BILLING_ENABLED && !!KEY;
 
   const mapDisabledReason = (() => {
     if (!BILLING_ENABLED) return 'Maps are disabled (VITE_BILLING_ENABLED=false).';
@@ -261,8 +245,6 @@ export default function PickupMap({ vendorId, initialCenter }) {
     } catch (_e) {}
 
     try {
-      // Only restore an offer if vendor is available.
-      if (!available) return;
       const savedOffer = safeJsonParse(window.localStorage.getItem(offerStorageKey(vendorId)));
       const offer = savedOffer?.offer || null;
       if (!offer) return;
@@ -329,7 +311,6 @@ export default function PickupMap({ vendorId, initialCenter }) {
 
   useEffect(() => {
     if (!vendorId) return;
-    if (!available) return;
     if (!online) return;
     if (currentOffer) return;
     const url = `${API_BASE || ''}/api/vendor/events?vendor_id=${encodeURIComponent(vendorId)}`;
@@ -357,16 +338,6 @@ export default function PickupMap({ vendorId, initialCenter }) {
       } catch (e) { console.error('Malformed offer', e); }
     });
 
-    es.addEventListener('vendor_availability', (ev) => {
-      try {
-        const data = JSON.parse(ev.data);
-        const next = !!(data?.available ?? data?.is_available ?? data?.isAvailable);
-        setAvailable(next);
-      } catch (_e) {
-        // ignore
-      }
-    });
-
     es.onerror = (err) => {
       console.warn('SSE error', err);
       setSseStatus('reconnecting');
@@ -376,12 +347,11 @@ export default function PickupMap({ vendorId, initialCenter }) {
     return () => {
       try { es.close(); } catch (e) {}
     };
-  }, [vendorId, available, online]);
+  }, [vendorId, online, currentOffer]);
 
   // If vendor opens pickup screen later, load any pending offers saved by the backend.
   useEffect(() => {
     if (!vendorId) return;
-    if (!available) return;
     if (!online) return;
     if (currentOffer) return;
 
@@ -408,7 +378,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
     return () => {
       cancelled = true;
     };
-  }, [API_BASE, vendorId, available, online, currentOffer]);
+  }, [API_BASE, vendorId, online, currentOffer]);
 
   const closeOffer = () => {
     setCurrentOffer(null);
@@ -753,23 +723,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
         mode={activeMode}
         online={online}
         sseStatus={sseStatus}
-        available={available}
         activeCount={assignedPickups?.length || 0}
-        onToggleAvailable={async (v) => {
-          const next = !!v;
-          setAvailable(next);
-          toast(next ? 'Available for offers' : 'Not available for offers');
-          try {
-            if (vendorId) {
-              await axios.post(`${API_BASE || ''}/api/vendor/availability`, {
-                vendor_id: vendorId,
-                available: next,
-              });
-            }
-          } catch (e) {
-            toast.error('Failed to update availability: ' + (e.response?.data?.error || e.message));
-          }
-        }}
       />
 
       <div className="flex items-center justify-between gap-3">
@@ -846,22 +800,11 @@ export default function PickupMap({ vendorId, initialCenter }) {
                   className="h-[520px] w-full rounded-md"
                   style={{ height: 520 }}
                 />
-                {mapState !== 'ready' ? (
-                  <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                    <div className="pointer-events-auto max-w-[95%] rounded-md border bg-white/95 p-3 text-xs text-gray-700 shadow">
-                      <div className="font-semibold">
-                        {mapState === 'loading' ? 'Loading map…' : 'Map not available'}
-                      </div>
-                      <div className="mt-1 text-gray-600">
-                        {mapError || 'If you just updated .env.local, restart `npm run dev`.'}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
+                {/* Best-effort: if map fails, pickup flow still works via cards + Directions. */}
               </div>
             ) : (
               <div className="rounded-md border border-dashed bg-gray-50 p-3 text-sm text-gray-600">
-                Map unavailable. {mapDisabledReason}
+                Map is disabled.
               </div>
             )}
           </CardContent>

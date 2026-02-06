@@ -130,7 +130,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
     window?.REACT_APP_CUSTOMER_BACKEND_LOCATION_URL ||
     null;
 
-  const DISCOVER_VENDOR_ID = 'mohar_singh_01';
+  const FALLBACK_DISCOVER_VENDOR_ID = 'mohar_singh_01';
 
   const normalizeBaseUrl = (baseUrl) => {
     if (!baseUrl) return '';
@@ -149,9 +149,10 @@ export default function PickupMap({ vendorId, initialCenter }) {
       return;
     }
     const offerUrl = computeOfferUrl();
+    const vendorIdToSend = vendorId || FALLBACK_DISCOVER_VENDOR_ID;
     try {
       await axios.post(CUSTOMER_BACKEND_LOCATION_URL, {
-        vendor_id: DISCOVER_VENDOR_ID,
+        vendor_id: vendorIdToSend,
         latitude,
         longitude,
         offer_url: offerUrl,
@@ -186,7 +187,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
       },
       { enableHighAccuracy: true, timeout: 5000 }
     );
-  }, []);
+  }, [vendorId]);
 
   // Send vendor location to backend
   const sendVendorLocation = async (lat, lng) => {

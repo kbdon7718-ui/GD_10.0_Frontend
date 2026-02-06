@@ -113,9 +113,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
   const API_BASE = getApiBaseUrl();
 
   const BILLING_ENABLED = String(import.meta.env.VITE_BILLING_ENABLED ?? 'true').toLowerCase() === 'true';
-  // Embedded Google Map is optional. Keep it OFF by default to avoid production map/billing/referrer errors.
-  const MAP_OPT_IN = String(import.meta.env.VITE_MAPS_ENABLED ?? 'false').toLowerCase() === 'true';
-  const MAP_ENABLED = MAP_OPT_IN && BILLING_ENABLED && !!KEY;
+  const MAP_ENABLED = BILLING_ENABLED && !!KEY;
 
   const mapDisabledReason = (() => {
     if (!BILLING_ENABLED) return 'Maps are disabled (VITE_BILLING_ENABLED=false).';
@@ -312,7 +310,6 @@ export default function PickupMap({ vendorId, initialCenter }) {
   useEffect(() => {
     if (!vendorId) return;
     if (!online) return;
-    if (currentOffer) return;
     const url = `${API_BASE || ''}/api/vendor/events?vendor_id=${encodeURIComponent(vendorId)}`;
     let es;
     try {
@@ -320,7 +317,9 @@ export default function PickupMap({ vendorId, initialCenter }) {
       es = new EventSource(url);
     } catch (e) {
       console.warn('EventSource not available', e);
-      setSseStatus('reconnecting');
+      // Some mobile browsers/webviews don't support EventSource reliably.
+      // We'll fall back to polling pending offers.
+      setSseStatus('polling');
       return;
     }
 
@@ -347,7 +346,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
     return () => {
       try { es.close(); } catch (e) {}
     };
-  }, [vendorId, online, currentOffer]);
+  }, [vendorId, online, API_BASE]);
 
   // If vendor opens pickup screen later, load any pending offers saved by the backend.
   useEffect(() => {
@@ -379,6 +378,43 @@ export default function PickupMap({ vendorId, initialCenter }) {
       cancelled = true;
     };
   }, [API_BASE, vendorId, online, currentOffer]);
+
+  // Fallback: poll pending offers when SSE is not connected (helps on some phones/webviews).
+  useEffect(() => {
+    if (!vendorId) return;
+    if (!online) return;
+
+    const shouldPoll = sseStatus !== 'connected';
+    if (!shouldPoll) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const resp = await axios.get(`${API_BASE || ''}/api/vendor/pending-offers`, {
+          params: { vendor_id: vendorId },
+        });
+        if (cancelled) return;
+        const offers = resp?.data?.offers;
+        if (Array.isArray(offers) && offers.length && !currentOffer) {
+          const first = offers[0];
+          setCurrentOffer({
+            ...first,
+            received_at: first?.received_at || first?.receivedAt || new Date().toISOString(),
+          });
+        }
+      } catch (_e) {
+        // ignore
+      }
+    };
+
+    const id = setInterval(tick, 10_000);
+    tick();
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [API_BASE, vendorId, online, sseStatus, currentOffer]);
 
   const closeOffer = () => {
     setCurrentOffer(null);
@@ -800,11 +836,17 @@ export default function PickupMap({ vendorId, initialCenter }) {
                   className="h-[520px] w-full rounded-md"
                   style={{ height: 520 }}
                 />
-                {/* Best-effort: if map fails, pickup flow still works via cards + Directions. */}
+                {mapState === 'loading' ? (
+                  <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                    <div className="pointer-events-auto max-w-[95%] rounded-md border bg-white/95 p-3 text-xs text-gray-700 shadow">
+                      <div className="font-semibold">Loading map…</div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="rounded-md border border-dashed bg-gray-50 p-3 text-sm text-gray-600">
-                Map is disabled.
+                Map unavailable. {mapDisabledReason}
               </div>
             )}
           </CardContent>

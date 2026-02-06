@@ -12,6 +12,7 @@ function statusCopy({ mode, online }) {
 
 function sseBadge(sseStatus) {
   if (sseStatus === "connected") return { label: "Live", variant: "default" };
+  if (sseStatus === "polling") return { label: "Live", variant: "default" };
   if (sseStatus === "connecting") return { label: "Connecting", variant: "secondary" };
   return { label: "Reconnecting", variant: "secondary" };
 }

@@ -9,11 +9,59 @@ import { toast } from 'sonner';
 import VendorPickupHeader from './VendorPickupHeader';
 import ActivePickupCard from './ActivePickupCard';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Button } from '../../ui/button';
 
 // Google Maps implementation for vendor pickup map.
 // Requires REACT_APP_GOOGLE_MAPS_API_KEY in frontend env.
 
 export default function PickupMap({ vendorId, initialCenter }) {
+  const OFFER_PERSIST_TTL_MS = 60 * 1000;
+  const HISTORY_LIMIT = 50;
+
+  const formatRupees = (value) => {
+    if (value == null || value === '') return '';
+    const n = Number(value);
+    if (Number.isFinite(n)) return `₹${n.toFixed(2)}`;
+    return String(value);
+  };
+
+  const safeJsonParse = (raw) => {
+    if (!raw) return null;
+    try {
+      return JSON.parse(String(raw));
+    } catch (_e) {
+      return null;
+    }
+  };
+
+  const computeOfferExpiryMs = (offer, savedAtMs) => {
+    if (!offer) return null;
+
+    const expiresAt = offer.expires_at || offer.expiresAt;
+    if (expiresAt) {
+      const ms = Date.parse(String(expiresAt));
+      if (!Number.isNaN(ms)) return ms;
+    }
+
+    const ttlSeconds = offer.ttl_seconds ?? offer.ttlSeconds ?? offer.expires_in ?? offer.expiresIn;
+    if (ttlSeconds != null && ttlSeconds !== '') {
+      const s = Number(ttlSeconds);
+      if (Number.isFinite(s) && s > 0) return Date.now() + s * 1000;
+    }
+
+    const base = Number.isFinite(Number(savedAtMs)) ? Number(savedAtMs) : Date.now();
+    return base + OFFER_PERSIST_TTL_MS;
+  };
+
+  const offerStorageKey = (id) => `scrapco_vendor_offer_${String(id)}`;
+  const assignedStorageKey = (id) => `scrapco_vendor_assigned_${String(id)}`;
+  const historyStorageKey = (id) => `scrapco_vendor_pickup_history_${String(id)}`;
+
+  const getPickupRequestId = (pickup) => {
+    if (!pickup) return null;
+    return pickup.request_id || pickup.requestId || pickup.pickupId || pickup.pickup_id || pickup.id || null;
+  };
+
   const [vendorLoc, setVendorLoc] = useState(null);
   const mapEl = useRef(null);
   const mapObj = useRef(null);
@@ -21,8 +69,11 @@ export default function PickupMap({ vendorId, initialCenter }) {
   const [mapState, setMapState] = useState('idle'); // idle | loading | ready | error
   const [mapError, setMapError] = useState('');
   const [offerActionPending, setOfferActionPending] = useState(false);
-  const [assignedPickup, setAssignedPickup] = useState(null);
-  const [assignedStatus, setAssignedStatus] = useState('assigned');
+  const [assignedPickups, setAssignedPickups] = useState([]);
+  const [pickupStatuses, setPickupStatuses] = useState({});
+  const [selectedPickupId, setSelectedPickupId] = useState(null);
+  const [pickupHistory, setPickupHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [available, setAvailable] = useState(() => {
     try {
       const raw = window.localStorage.getItem('scrapco_vendor_available');
@@ -34,16 +85,32 @@ export default function PickupMap({ vendorId, initialCenter }) {
   });
   const [sseStatus, setSseStatus] = useState('connecting');
   const sentDiscoverabilityRef = useRef(false);
-  const busyRef = useRef(false);
   const currentOfferMarkerRef = useRef(null);
-  const assignedMarkerRef = useRef(null);
+  const assignedMarkersRef = useRef(new Map());
   const [locationLabel, setLocationLabel] = useState('');
   const isMobile = useMediaQuery('(max-width: 900px)');
   const { online } = useNetworkStatus();
 
+  const selectedAssignedPickup = (() => {
+    if (!assignedPickups?.length) return null;
+    const wanted = selectedPickupId
+      ? assignedPickups.find((p) => getPickupRequestId(p) === selectedPickupId)
+      : null;
+    return wanted || assignedPickups[0] || null;
+  })();
+
   useEffect(() => {
-    busyRef.current = !!assignedPickup;
-  }, [assignedPickup]);
+    if (!assignedPickups?.length) {
+      setSelectedPickupId(null);
+      return;
+    }
+    const selectedStillExists =
+      selectedPickupId && assignedPickups.some((p) => getPickupRequestId(p) === selectedPickupId);
+    if (!selectedStillExists) {
+      setSelectedPickupId(getPickupRequestId(assignedPickups[0]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignedPickups]);
 
   useEffect(() => {
     try {
@@ -152,10 +219,119 @@ export default function PickupMap({ vendorId, initialCenter }) {
   const [currentOffer, setCurrentOffer] = useState(null);
   const { secondsLeft: offerSecondsLeft, progress: offerProgress } = useOfferCountdown(currentOffer);
 
+  // Restore offer/assigned state after reload (per vendor).
+  useEffect(() => {
+    if (!vendorId) return;
+
+    try {
+      const savedHistory = safeJsonParse(window.localStorage.getItem(historyStorageKey(vendorId)));
+      if (Array.isArray(savedHistory)) {
+        setPickupHistory(savedHistory.slice(0, HISTORY_LIMIT));
+      }
+    } catch (_e) {}
+
+    try {
+      const savedAssigned = safeJsonParse(window.localStorage.getItem(assignedStorageKey(vendorId)));
+      const legacyPickup = savedAssigned?.pickup || savedAssigned?.assignedPickup || null;
+      const legacyStatus = savedAssigned?.status || savedAssigned?.assignedStatus || 'assigned';
+
+      const pickups =
+        savedAssigned?.pickups ||
+        savedAssigned?.assignedPickups ||
+        (legacyPickup ? [legacyPickup] : []);
+
+      if (Array.isArray(pickups) && pickups.length) {
+        const normalized = pickups.filter((p) => !!getPickupRequestId(p));
+        if (normalized.length) {
+          setAssignedPickups(normalized);
+
+          const savedStatuses = savedAssigned?.statuses || savedAssigned?.pickupStatuses || null;
+          if (savedStatuses && typeof savedStatuses === 'object') {
+            setPickupStatuses(savedStatuses);
+          } else if (legacyPickup) {
+            const id = getPickupRequestId(legacyPickup);
+            setPickupStatuses(id ? { [id]: legacyStatus } : {});
+          }
+
+          const savedSelected = savedAssigned?.selectedPickupId || null;
+          setSelectedPickupId(savedSelected || getPickupRequestId(normalized[0]));
+          return;
+        }
+      }
+    } catch (_e) {}
+
+    try {
+      // Only restore an offer if vendor is available.
+      if (!available) return;
+      const savedOffer = safeJsonParse(window.localStorage.getItem(offerStorageKey(vendorId)));
+      const offer = savedOffer?.offer || null;
+      if (!offer) return;
+
+      const expiryMs = computeOfferExpiryMs(offer, savedOffer?.saved_at);
+      if (expiryMs && Date.now() > expiryMs) {
+        try {
+          window.localStorage.removeItem(offerStorageKey(vendorId));
+        } catch (_e2) {}
+        return;
+      }
+
+      setCurrentOffer(offer);
+    } catch (_e) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorId]);
+
+  // Persist pickup history across reload.
+  useEffect(() => {
+    if (!vendorId) return;
+    try {
+      if (pickupHistory?.length) {
+        window.localStorage.setItem(historyStorageKey(vendorId), JSON.stringify(pickupHistory.slice(0, HISTORY_LIMIT)));
+      } else {
+        window.localStorage.removeItem(historyStorageKey(vendorId));
+      }
+    } catch (_e) {}
+  }, [vendorId, pickupHistory]);
+
+  // Persist assigned pickups across reload.
+  useEffect(() => {
+    if (!vendorId) return;
+    try {
+      if (assignedPickups?.length) {
+        window.localStorage.setItem(
+          assignedStorageKey(vendorId),
+          JSON.stringify({
+            pickups: assignedPickups,
+            statuses: pickupStatuses,
+            selectedPickupId,
+            saved_at: Date.now(),
+          })
+        );
+      } else {
+        window.localStorage.removeItem(assignedStorageKey(vendorId));
+      }
+    } catch (_e) {}
+  }, [vendorId, assignedPickups, pickupStatuses, selectedPickupId]);
+
+  // Persist current offer across reload (short TTL).
+  useEffect(() => {
+    if (!vendorId) return;
+    try {
+      if (currentOffer) {
+        window.localStorage.setItem(
+          offerStorageKey(vendorId),
+          JSON.stringify({ offer: currentOffer, saved_at: Date.now() })
+        );
+      } else {
+        window.localStorage.removeItem(offerStorageKey(vendorId));
+      }
+    } catch (_e) {}
+  }, [vendorId, currentOffer]);
+
   useEffect(() => {
     if (!vendorId) return;
     if (!available) return;
     if (!online) return;
+    if (currentOffer) return;
     const url = `${API_BASE || ''}/api/vendor/events?vendor_id=${encodeURIComponent(vendorId)}`;
     let es;
     try {
@@ -172,11 +348,12 @@ export default function PickupMap({ vendorId, initialCenter }) {
     es.addEventListener('pickup_offer', (ev) => {
       try {
         const data = JSON.parse(ev.data);
-        if (busyRef.current) {
-          toast('New pickup offer received (you are busy)');
-          return;
-        }
-        setCurrentOffer(data);
+        // Ensure we have a timestamp for reload persistence/expiry fallback.
+        const withTimestamps = {
+          ...data,
+          received_at: data?.received_at || data?.receivedAt || new Date().toISOString(),
+        };
+        setCurrentOffer(withTimestamps);
       } catch (e) { console.error('Malformed offer', e); }
     });
 
@@ -200,6 +377,38 @@ export default function PickupMap({ vendorId, initialCenter }) {
       try { es.close(); } catch (e) {}
     };
   }, [vendorId, available, online]);
+
+  // If vendor opens pickup screen later, load any pending offers saved by the backend.
+  useEffect(() => {
+    if (!vendorId) return;
+    if (!available) return;
+    if (!online) return;
+    if (currentOffer) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await axios.get(`${API_BASE || ''}/api/vendor/pending-offers`, {
+          params: { vendor_id: vendorId },
+        });
+        const offers = resp?.data?.offers;
+        if (cancelled) return;
+        if (Array.isArray(offers) && offers.length) {
+          const first = offers[0];
+          setCurrentOffer({
+            ...first,
+            received_at: first?.received_at || first?.receivedAt || new Date().toISOString(),
+          });
+        }
+      } catch (_e) {
+        // ignore; SSE will still work when connected
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [API_BASE, vendorId, available, online, currentOffer]);
 
   const closeOffer = () => {
     setCurrentOffer(null);
@@ -227,10 +436,6 @@ export default function PickupMap({ vendorId, initialCenter }) {
       toast.error('You are offline.');
       return;
     }
-    if (decision === 'accept' && busyRef.current) {
-      toast('You already have an active pickup');
-      return;
-    }
     const requestId = getOfferRequestId(currentOffer);
     if (!requestId) {
       toast.error('Offer is missing request_id');
@@ -248,7 +453,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
       if (decision === 'accept') {
         const lat = Number(currentOffer?.latitude ?? currentOffer?.lat);
         const lng = Number(currentOffer?.longitude ?? currentOffer?.lng);
-        setAssignedPickup({
+        const nextPickup = {
           request_id: requestId,
           scrap_type: currentOffer?.scrap_type ?? currentOffer?.scrapType ?? null,
           estimated_quantity: currentOffer?.estimated_quantity ?? currentOffer?.estimated_weight ?? null,
@@ -256,8 +461,15 @@ export default function PickupMap({ vendorId, initialCenter }) {
           longitude: Number.isFinite(lng) ? lng : null,
           assigned_at: Date.now(),
           raw: currentOffer,
+        };
+
+        setAssignedPickups((prev) => {
+          const arr = Array.isArray(prev) ? prev : [];
+          if (arr.some((p) => getPickupRequestId(p) === requestId)) return arr;
+          return [nextPickup, ...arr];
         });
-        setAssignedStatus('assigned');
+        setPickupStatuses((prev) => ({ ...(prev || {}), [requestId]: 'assigned' }));
+        setSelectedPickupId(requestId);
         toast.success('Pickup accepted');
         closeOffer();
       } else {
@@ -274,7 +486,16 @@ export default function PickupMap({ vendorId, initialCenter }) {
 
   const openDirections = (destLat, destLng) => {
     if (!destLat || !destLng) return;
-    if (assignedPickup) setAssignedStatus((s) => (s === 'completed' ? s : 'on_the_way'));
+    if (selectedAssignedPickup) {
+      const id = getPickupRequestId(selectedAssignedPickup);
+      if (id) {
+        setPickupStatuses((prev) => {
+          const cur = prev?.[id];
+          if (cur === 'completed') return prev;
+          return { ...(prev || {}), [id]: 'on_the_way' };
+        });
+      }
+    }
     const origin = vendorLoc?.lat && vendorLoc?.lng ? `${vendorLoc.lat},${vendorLoc.lng}` : null;
     const destination = `${destLat},${destLng}`;
     const url = origin
@@ -391,38 +612,57 @@ export default function PickupMap({ vendorId, initialCenter }) {
     };
   }, [vendorId]);
 
-  // Render assigned pickup marker (green)
+  // Render assigned pickup markers (green)
   useEffect(() => {
     if (!MAP_ENABLED || !mapObj.current || !window.google) return;
 
     try {
-      if (assignedMarkerRef.current) {
-        assignedMarkerRef.current.setMap(null);
-        assignedMarkerRef.current = null;
+      const markers = assignedMarkersRef.current;
+      const currentIds = new Set((assignedPickups || []).map((p) => getPickupRequestId(p)).filter(Boolean));
+
+      for (const [id, marker] of markers.entries()) {
+        if (!currentIds.has(id)) {
+          try { marker.setMap(null); } catch (_e) {}
+          markers.delete(id);
+        }
       }
 
-      if (!assignedPickup) return;
-      const lat = Number(assignedPickup?.latitude);
-      const lng = Number(assignedPickup?.longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      for (const pickup of assignedPickups || []) {
+        const id = getPickupRequestId(pickup);
+        if (!id) continue;
+        const lat = Number(pickup?.latitude);
+        const lng = Number(pickup?.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
-      assignedMarkerRef.current = new window.google.maps.Marker({
-        position: { lat, lng },
-        map: mapObj.current,
-        title: 'Assigned Pickup',
-        icon: {
-          path: window.google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-          scale: 6,
-          fillColor: '#0f9d58',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-        },
-      });
+        if (markers.has(id)) {
+          try { markers.get(id).setPosition({ lat, lng }); } catch (_e) {}
+          continue;
+        }
+
+        const marker = new window.google.maps.Marker({
+          position: { lat, lng },
+          map: mapObj.current,
+          title: 'Assigned Pickup',
+          icon: {
+            path: window.google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+            scale: 6,
+            fillColor: '#0f9d58',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+          },
+        });
+
+        marker.addListener?.('click', () => {
+          setSelectedPickupId(id);
+        });
+
+        markers.set(id, marker);
+      }
     } catch (e) {
       console.warn('Failed to render assigned marker', e);
     }
-  }, [assignedPickup, MAP_ENABLED]);
+  }, [assignedPickups, MAP_ENABLED]);
 
   // Show current offer location on the map while offer is active
   useEffect(() => {
@@ -475,12 +715,8 @@ export default function PickupMap({ vendorId, initialCenter }) {
     });
   };
 
-  const activePickup = assignedPickup || currentOffer || null;
-  const activeMode = assignedPickup ? 'assigned' : currentOffer ? 'offer' : 'idle';
-
-  useEffect(() => {
-    if (!assignedPickup) setAssignedStatus('assigned');
-  }, [assignedPickup]);
+  const activePickup = selectedAssignedPickup || currentOffer || null;
+  const activeMode = selectedAssignedPickup ? 'assigned' : currentOffer ? 'offer' : 'idle';
 
   useEffect(() => {
     let cancelled = false;
@@ -504,7 +740,6 @@ export default function PickupMap({ vendorId, initialCenter }) {
         open={!!currentOffer}
         offer={currentOffer}
         areaLabel={locationLabel}
-        busy={!!assignedPickup}
         online={online}
         pending={offerActionPending}
         secondsLeft={offerSecondsLeft}
@@ -519,7 +754,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
         online={online}
         sseStatus={sseStatus}
         available={available}
-        busy={!!assignedPickup}
+        activeCount={assignedPickups?.length || 0}
         onToggleAvailable={async (v) => {
           const next = !!v;
           setAvailable(next);
@@ -536,6 +771,67 @@ export default function PickupMap({ vendorId, initialCenter }) {
           }
         }}
       />
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs text-gray-600">
+          {pickupHistory?.length ? `History: ${pickupHistory.length}` : 'No history yet'}
+        </div>
+        <Button variant="secondary" onClick={() => setShowHistory((v) => !v)}>
+          {showHistory ? 'Hide history' : 'View history'}
+        </Button>
+      </div>
+
+      {showHistory ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Pickup history</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(pickupHistory || []).length ? (
+              (pickupHistory || []).map((h) => (
+                <div key={String(h?.request_id || h?.requestId || h?.id || h?.completed_at || Math.random())} className="rounded-md border p-3">
+                  <div className="space-y-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">
+                          {String(h?.customer_name || h?.customerName || h?.name || h?.scrap_type || h?.scrapType || 'Pickup')}
+                        </div>
+                        <div className="text-xs text-gray-600 truncate">
+                          {h?.completed_at ? new Date(h.completed_at).toLocaleString() : ''}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-700 text-right">
+                        {formatRupees(h?.amount)}
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-gray-700">
+                      <span className="font-semibold">Scrap:</span>{' '}
+                      {String(h?.scrap_type || h?.scrapType || 'Unknown')}
+                      {h?.estimated_quantity != null && h?.estimated_quantity !== '' ? ` • Qty: ${String(h.estimated_quantity)}` : ''}
+                    </div>
+
+                    {h?.address || h?.areaLabel || h?.locationLabel ? (
+                      <div className="text-xs text-gray-600 truncate">
+                        <span className="font-semibold">Address:</span>{' '}
+                        {String(h?.address || h?.areaLabel || h?.locationLabel)}
+                      </div>
+                    ) : null}
+
+                    <div className="text-[11px] text-gray-500 truncate">
+                      ID: {String(h?.request_id || h?.requestId || h?.id || '-')}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-md border border-dashed bg-gray-50 p-3 text-sm text-gray-600">
+                Completed pickups will appear here.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className={isMobile ? 'grid gap-3' : 'grid grid-cols-5 gap-3'}>
         <Card className={isMobile ? '' : 'col-span-3'}>
@@ -572,43 +868,143 @@ export default function PickupMap({ vendorId, initialCenter }) {
         </Card>
 
         <div className={isMobile ? '' : 'col-span-2'}>
-          <ActivePickupCard
-            mode={activeMode}
-            pickup={activePickup}
-            areaLabel={locationLabel}
-            assignedStatus={assignedStatus}
-            online={online}
-            pending={offerActionPending}
-            onShowOnMap={() => {
-              const lat = Number(activePickup?.latitude ?? activePickup?.lat);
-              const lng = Number(activePickup?.longitude ?? activePickup?.lng);
-              centerMapOn(lat, lng, 16);
-            }}
-            onDirections={() => openDirections(Number(activePickup?.latitude ?? activePickup?.lat), Number(activePickup?.longitude ?? activePickup?.lng))}
-            onMarkOnTheWay={() => setAssignedStatus('on_the_way')}
-            onComplete={async () => {
-              if (!assignedPickup) return;
-              if (!confirm('Mark pickup as completed?')) return;
-              if (!online) {
-                toast.error('You are offline.');
-                return;
-              }
-              setOfferActionPending(true);
-              try {
-                await axios.post(`${API_BASE || ''}/api/vendor/complete`, {
-                  vendor_id: vendorId,
-                  request_id: assignedPickup.request_id,
-                });
-                toast.success('Pickup marked completed');
-                setAssignedStatus('completed');
-                setAssignedPickup(null);
-              } catch (e) {
-                toast.error('Complete failed: ' + (e.response?.data?.error || e.message));
-              } finally {
-                setOfferActionPending(false);
-              }
-            }}
-          />
+          <div className="space-y-3">
+            {(assignedPickups || []).length ? (
+              (assignedPickups || []).map((pickup) => {
+                const id = getPickupRequestId(pickup);
+                const isSelected = !!id && id === selectedPickupId;
+                const status = (id && pickupStatuses?.[id]) || 'assigned';
+                const lat = Number(pickup?.latitude ?? pickup?.lat);
+                const lng = Number(pickup?.longitude ?? pickup?.lng);
+
+                return (
+                  <div key={id || JSON.stringify(pickup)} className={isSelected ? '' : 'opacity-95'}>
+                    <ActivePickupCard
+                      mode="assigned"
+                      pickup={pickup}
+                      areaLabel={isSelected ? locationLabel : ''}
+                      assignedStatus={status}
+                      online={online}
+                      pending={offerActionPending}
+                      onShowOnMap={() => {
+                        if (id) setSelectedPickupId(id);
+                        centerMapOn(lat, lng, 16);
+                      }}
+                      onDirections={() => {
+                        if (id) setSelectedPickupId(id);
+                        openDirections(lat, lng);
+                      }}
+                      onMarkOnTheWay={async () => {
+                        if (!id) return;
+                        if (!online) {
+                          toast.error('You are offline.');
+                          return;
+                        }
+                        setOfferActionPending(true);
+                        try {
+                          await axios.post(`${API_BASE || ''}/api/vendor/on-the-way`, {
+                            vendor_id: vendorId,
+                            request_id: id,
+                          });
+                          toast.success('Marked on the way');
+                          setPickupStatuses((prev) => ({ ...(prev || {}), [id]: 'on_the_way' }));
+                          setSelectedPickupId(id);
+                        } catch (e) {
+                          toast.error('On-the-way failed: ' + (e.response?.data?.error || e.message));
+                        } finally {
+                          setOfferActionPending(false);
+                        }
+                      }}
+                      onComplete={async () => {
+                        if (!id) return;
+                        if (!confirm('Mark pickup as completed?')) return;
+                        if (!online) {
+                          toast.error('You are offline.');
+                          return;
+                        }
+                        setOfferActionPending(true);
+                        try {
+                          const resp = await axios.post(`${API_BASE || ''}/api/vendor/pickup-done`, {
+                            vendor_id: vendorId,
+                            request_id: id,
+                          });
+                          toast.success('Pickup marked completed');
+                          setPickupStatuses((prev) => ({ ...(prev || {}), [id]: 'completed' }));
+
+                          const raw = pickup?.raw || {};
+                          const responseData = resp?.data || {};
+                          const customerName =
+                            raw?.customer_name || raw?.customerName || raw?.name ||
+                            pickup?.customer_name || pickup?.customerName || pickup?.name ||
+                            responseData?.customer_name || responseData?.customerName || responseData?.name ||
+                            null;
+
+                          const amount =
+                            responseData?.amount ?? responseData?.total_amount ?? responseData?.totalAmount ??
+                            raw?.amount ?? raw?.total_amount ?? raw?.totalAmount ??
+                            null;
+
+                          let address =
+                            raw?.address || raw?.areaLabel || raw?.locationLabel ||
+                            pickup?.address || pickup?.areaLabel || pickup?.locationLabel ||
+                            null;
+
+                          if (!address) {
+                            try {
+                              const lat2 = Number(pickup?.latitude ?? pickup?.lat);
+                              const lng2 = Number(pickup?.longitude ?? pickup?.lng);
+                              if (Number.isFinite(lat2) && Number.isFinite(lng2)) {
+                                address = await reverseGeocodeLabel(lat2, lng2);
+                              }
+                            } catch (_e) {}
+                          }
+
+                          setPickupHistory((prev) => {
+                            const arr = Array.isArray(prev) ? prev : [];
+                            const entry = {
+                              request_id: id,
+                              customer_name: customerName,
+                              amount,
+                              address,
+                              scrap_type: pickup?.scrap_type ?? pickup?.scrapType ?? null,
+                              estimated_quantity:
+                                pickup?.estimated_quantity ?? pickup?.estimated_qty ?? pickup?.estimated_weight ?? pickup?.estimatedWeight ?? null,
+                              latitude: pickup?.latitude ?? pickup?.lat ?? null,
+                              longitude: pickup?.longitude ?? pickup?.lng ?? null,
+                              completed_at: new Date().toISOString(),
+                            };
+                            return [entry, ...arr].slice(0, HISTORY_LIMIT);
+                          });
+                          setAssignedPickups((prev) => (Array.isArray(prev) ? prev.filter((p) => getPickupRequestId(p) !== id) : []));
+                        } catch (e) {
+                          toast.error('Complete failed: ' + (e.response?.data?.error || e.message));
+                        } finally {
+                          setOfferActionPending(false);
+                        }
+                      }}
+                    />
+                  </div>
+                );
+              })
+            ) : (
+              <ActivePickupCard
+                mode={activeMode}
+                pickup={activePickup}
+                areaLabel={locationLabel}
+                assignedStatus={'assigned'}
+                online={online}
+                pending={offerActionPending}
+                onShowOnMap={() => {
+                  const lat = Number(activePickup?.latitude ?? activePickup?.lat);
+                  const lng = Number(activePickup?.longitude ?? activePickup?.lng);
+                  centerMapOn(lat, lng, 16);
+                }}
+                onDirections={() => openDirections(Number(activePickup?.latitude ?? activePickup?.lat), Number(activePickup?.longitude ?? activePickup?.lng))}
+                onMarkOnTheWay={() => {}}
+                onComplete={() => {}}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>

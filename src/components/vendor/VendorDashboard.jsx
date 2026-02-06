@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { BadgePercent, BookOpen, LogOut, User } from "lucide-react";
+import { BadgePercent, BookOpen, LogOut, MapPin, User } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
@@ -44,10 +44,12 @@ export function VendorDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [vendor, setVendor] = useState(null);
+  const [vendorProfile, setVendorProfile] = useState(null);
   const [ledger, setLedger] = useState([]);
   const [outstanding, setOutstanding] = useState(0);
   const [rates, setRates] = useState([]);
   const [activeTab, setActiveTab] = useState("sale");
+  const [hasPendingPickupOffer, setHasPendingPickupOffer] = useState(false);
 
   const companyId = useMemo(() => getCompanyId(), []);
   const godownId = useMemo(() => getGodownId(), []);
@@ -84,6 +86,7 @@ export function VendorDashboard() {
 
         if (!mounted) return;
         setVendor(meJson.vendor);
+        setVendorProfile(meJson.profile || null);
         setLedger(Array.isArray(ledgerJson.ledger) ? ledgerJson.ledger : []);
         setOutstanding(Number(ledgerJson.outstanding || 0));
         setRates(Array.isArray(ratesJson.rates) ? ratesJson.rates : []);
@@ -99,6 +102,51 @@ export function VendorDashboard() {
       mounted = false;
     };
   }, [API, token, companyId, godownId]);
+
+  // Listen for pickup offers globally (so vendor gets notified even if pickup tab isn't open).
+  useEffect(() => {
+    const vendorId = vendorProfile?.vendor_id || vendor?.vendor_id || vendor?.id;
+    if (!vendorId) return;
+
+    const base = String(API || '').replace(/\/+$/, '');
+    const url = `${base}/api/vendor/events?vendor_id=${encodeURIComponent(vendorId)}`;
+    let es;
+
+    try {
+      es = new EventSource(url);
+    } catch (_e) {
+      return;
+    }
+
+    es.addEventListener('pickup_offer', (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        const offer = {
+          ...data,
+          received_at: data?.received_at || data?.receivedAt || new Date().toISOString(),
+        };
+
+        // Persist so Pickup screen can restore on open.
+        try {
+          window.localStorage.setItem(`scrapco_vendor_offer_${String(vendorId)}`, JSON.stringify({ offer, saved_at: Date.now() }));
+        } catch (_e2) {}
+
+        setHasPendingPickupOffer(true);
+        toast('New pickup request received');
+
+        // Optional browser notification (works only when site is open)
+        try {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification('New pickup request', { body: 'Open Pickup tab to accept.' });
+          }
+        } catch (_e3) {}
+      } catch (_e) {}
+    });
+
+    return () => {
+      try { es.close(); } catch (_e) {}
+    };
+  }, [API, vendor?.vendor_id, vendor?.id, vendorProfile?.vendor_id]);
 
   if (loading) return null;
 
@@ -161,9 +209,11 @@ export function VendorDashboard() {
                  {vendor.vendor_name}
                </div>
             </div>
-            <div className="text-sm">
-              Outstanding: <span className="font-semibold">₹{Number(outstanding || 0).toFixed(2)}</span>
-            </div>
+            {activeTab !== "pickup" ? (
+              <div className="text-sm">
+                Outstanding: <span className="font-semibold">₹{Number(outstanding || 0).toFixed(2)}</span>
+              </div>
+            ) : null}
           </CardHeader>
         </Card>
 
@@ -275,7 +325,19 @@ export function VendorDashboard() {
               <div>
                 <span className="text-gray-600 dark:text-gray-300">Type:</span> {vendor.vendor_type}
               </div>
-              {/* Company and godown IDs are intentionally hidden from vendor UI */}
+              <div>
+                <span className="text-gray-600 dark:text-gray-300">Vendor ID:</span>{" "}
+                {vendorProfile?.vendor_id || vendor.vendor_id || vendor.id || "-"}
+              </div>
+              <div>
+                <span className="text-gray-600 dark:text-gray-300">Email:</span> {vendorProfile?.email || "-"}
+              </div>
+              <div>
+                <span className="text-gray-600 dark:text-gray-300">Phone:</span> {vendorProfile?.phone || "-"}
+              </div>
+              <div>
+                <span className="text-gray-600 dark:text-gray-300">Role:</span> {vendorProfile?.role || "vendor"}
+              </div>
             </CardContent>
           </Card>
         ) : null}
@@ -300,7 +362,7 @@ export function VendorDashboard() {
           <NavBtn
             active={activeTab === "pickup"}
             onClick={() => setActiveTab("pickup")}
-            icon={<BadgePercent className="h-5 w-5" />}
+            icon={<MapPin className="h-5 w-5" />}
             label="Pickup"
           />
 

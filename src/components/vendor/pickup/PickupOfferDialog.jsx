@@ -68,7 +68,6 @@ export default function PickupOfferDialog({
   open,
   offer,
   areaLabel,
-  busy,
   online,
   pending,
   secondsLeft,
@@ -128,12 +127,6 @@ export default function PickupOfferDialog({
           </div>
         ) : null}
 
-        {busy ? (
-          <div className="mt-3 rounded-md bg-amber-50 p-2 text-xs text-amber-700">
-            You already have an active pickup. Accept is disabled.
-          </div>
-        ) : null}
-
         <div className="mt-4 grid grid-cols-2 gap-3">
           <Button
             variant="destructive"
@@ -144,7 +137,7 @@ export default function PickupOfferDialog({
           </Button>
           <Button
             className="bg-emerald-600 hover:bg-emerald-700"
-            disabled={pending || !online || busy}
+            disabled={pending || !online}
             onClick={onAccept}
           >
             {pending ? "Sending…" : "Accept"}

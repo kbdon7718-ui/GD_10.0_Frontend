@@ -22,7 +22,7 @@ export default function VendorPickupHeader({
   online,
   sseStatus,
   available,
-  busy,
+  activeCount,
   onToggleAvailable,
 }) {
   const copy = statusCopy({ mode, online });
@@ -35,7 +35,7 @@ export default function VendorPickupHeader({
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-gray-900 truncate">{copy.title}</h2>
             <Badge variant={badge.variant}>{badge.label}</Badge>
-            {busy ? <Badge variant="secondary">Busy</Badge> : null}
+            {Number(activeCount) > 0 ? <Badge variant="secondary">{Number(activeCount)} active</Badge> : null}
           </div>
           <p className="mt-1 text-xs text-gray-600">{copy.sub}</p>
         </div>

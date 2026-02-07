@@ -121,16 +121,8 @@ export default function PickupMap({ vendorId, initialCenter }) {
     return '';
   })();
 
-  const CUSTOMER_BACKEND_LOCATION_URL =
-    import.meta.env.VITE_CUSTOMER_BACKEND_LOCATION_URL ||
-    import.meta.env.CUSTOMER_BACKEND_LOCATION_URL ||
-    import.meta.env.REACT_APP_CUSTOMER_BACKEND_LOCATION_URL ||
-    window?.VITE_CUSTOMER_BACKEND_LOCATION_URL ||
-    window?.CUSTOMER_BACKEND_LOCATION_URL ||
-    window?.REACT_APP_CUSTOMER_BACKEND_LOCATION_URL ||
-    null;
-
-  const FALLBACK_DISCOVER_VENDOR_ID = 'mohar_singh_01';
+  // Note: The frontend should only depend on the vendor backend base URL (VITE_API_URL).
+  // Any customer-backend URLs should live in the vendor backend .env and be forwarded server-side.
 
   const normalizeBaseUrl = (baseUrl) => {
     if (!baseUrl) return '';
@@ -144,15 +136,11 @@ export default function PickupMap({ vendorId, initialCenter }) {
   };
 
   const sendVendorDiscoverability = async ({ latitude, longitude }) => {
-    if (!CUSTOMER_BACKEND_LOCATION_URL) {
-      console.warn('CUSTOMER_BACKEND_LOCATION_URL not configured; skipping vendor discoverability POST');
-      return;
-    }
+    if (!vendorId) return;
     const offerUrl = computeOfferUrl();
-    const vendorIdToSend = vendorId || FALLBACK_DISCOVER_VENDOR_ID;
     try {
-      await axios.post(CUSTOMER_BACKEND_LOCATION_URL, {
-        vendor_id: vendorIdToSend,
+      await axios.post(`${API_BASE || ''}/api/vendor/live-location`, {
+        vendor_id: vendorId,
         latitude,
         longitude,
         offer_url: offerUrl,
@@ -165,6 +153,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
 
   // On map load/startup: send vendor location to customer backend once (no timers/polling)
   useEffect(() => {
+    if (!vendorId) return;
     if (sentDiscoverabilityRef.current) return;
     sentDiscoverabilityRef.current = true;
 
@@ -910,10 +899,45 @@ export default function PickupMap({ vendorId, initialCenter }) {
                         }
                         setOfferActionPending(true);
                         try {
-                          const resp = await axios.post(`${API_BASE || ''}/api/vendor/pickup-done`, {
-                            vendor_id: vendorId,
-                            request_id: id,
-                          });
+                          const doPickupDone = () =>
+                            axios.post(`${API_BASE || ''}/api/vendor/pickup-done`, {
+                              vendor_id: vendorId,
+                              request_id: id,
+                            });
+
+                          let resp;
+                          try {
+                            resp = await doPickupDone();
+                          } catch (e1) {
+                            const status = e1?.response?.status;
+                            const msg = String(e1?.response?.data?.error || e1?.message || '');
+
+                            // Common customer-backend rule: completion allowed only after on-the-way.
+                            if (status === 409) {
+                              try {
+                                await axios.post(`${API_BASE || ''}/api/vendor/on-the-way`, {
+                                  vendor_id: vendorId,
+                                  request_id: id,
+                                });
+                                setPickupStatuses((prev) => ({ ...(prev || {}), [id]: 'on_the_way' }));
+                              } catch (_e2) {
+                                // ignore; still try completion
+                              }
+
+                              try {
+                                resp = await doPickupDone();
+                              } catch (e3) {
+                                const msg2 = String(e3?.response?.data?.error || e3?.message || '');
+                                throw new Error(
+                                  msg2 ||
+                                    msg ||
+                                    'Pickup cannot be completed yet. It may not be assigned to this vendor or may require a different state.'
+                                );
+                              }
+                            } else {
+                              throw new Error(msg || 'Complete failed');
+                            }
+                          }
                           toast.success('Pickup marked completed');
                           setPickupStatuses((prev) => ({ ...(prev || {}), [id]: 'completed' }));
 
@@ -963,7 +987,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
                           });
                           setAssignedPickups((prev) => (Array.isArray(prev) ? prev.filter((p) => getPickupRequestId(p) !== id) : []));
                         } catch (e) {
-                          toast.error('Complete failed: ' + (e.response?.data?.error || e.message));
+                          toast.error('Complete failed: ' + (e?.message || 'Unknown error'));
                         } finally {
                           setOfferActionPending(false);
                         }

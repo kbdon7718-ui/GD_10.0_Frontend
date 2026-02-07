@@ -15,3 +15,13 @@ root.render(
 );
 
 reportWebVitals();
+
+// Register service worker for Web Push (optional).
+// Permission + subscription is triggered by UI action.
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // ignore
+    });
+  });
+}

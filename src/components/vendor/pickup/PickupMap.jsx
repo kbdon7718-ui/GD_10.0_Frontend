@@ -10,6 +10,7 @@ import VendorPickupHeader from './VendorPickupHeader';
 import ActivePickupCard from './ActivePickupCard';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
+import { ensurePushSubscription } from '../../../utils/pushNotifications';
 
 // Google Maps implementation for vendor pickup map.
 // Requires REACT_APP_GOOGLE_MAPS_API_KEY in frontend env.
@@ -81,6 +82,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
   const [locationLabel, setLocationLabel] = useState('');
   const isMobile = useMediaQuery('(max-width: 900px)');
   const { online } = useNetworkStatus();
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   const selectedAssignedPickup = (() => {
     if (!assignedPickups?.length) return null;
@@ -732,6 +734,27 @@ export default function PickupMap({ vendorId, initialCenter }) {
 
   return (
     <div className="p-3 space-y-3">
+      <div className="flex items-center justify-end">
+        <Button
+          variant={pushEnabled ? 'secondary' : 'default'}
+          onClick={async () => {
+            try {
+              const res = await ensurePushSubscription({ apiBase: API_BASE || '', vendorId });
+              if (res?.enabled) {
+                setPushEnabled(true);
+                toast.success('Notifications enabled');
+              } else {
+                toast.error('Notifications not enabled');
+              }
+            } catch (e) {
+              toast.error('Notifications failed: ' + (e?.response?.data?.error || e?.message || 'Unknown error'));
+            }
+          }}
+        >
+          {pushEnabled ? 'Notifications enabled' : 'Enable notifications'}
+        </Button>
+      </div>
+
       <PickupOfferDialog
         open={!!currentOffer}
         offer={currentOffer}

@@ -1,4 +1,5 @@
 import React from "react";
+import { Wifi, WifiOff, Sparkles } from "lucide-react";
 
 import { Card } from "../../ui/card";
 import { Badge } from "../../ui/badge";
@@ -25,14 +26,21 @@ export default function VendorPickupHeader({
 }) {
   const copy = statusCopy({ mode, online });
   const badge = sseBadge(sseStatus);
+  const isOffer = mode === "offer";
 
   return (
-    <Card className="p-4">
+    <Card className={`p-4 shadow-sm ${isOffer ? "border-emerald-200" : ""}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-gray-900 truncate">{copy.title}</h2>
-            <Badge variant={badge.variant}>{badge.label}</Badge>
+            <h2 className="text-base font-bold text-gray-900 truncate flex items-center gap-2">
+              {online ? <Wifi className="h-4 w-4 text-emerald-600" /> : <WifiOff className="h-4 w-4 text-red-500" />}
+              {copy.title}
+              {isOffer ? <Sparkles className="h-4 w-4 text-emerald-600" /> : null}
+            </h2>
+            <Badge variant={badge.variant} className={badge.label === "Live" ? "bg-emerald-600 text-white" : ""}>
+              {badge.label}
+            </Badge>
             {Number(activeCount) > 0 ? <Badge variant="secondary">{Number(activeCount)} active</Badge> : null}
           </div>
           <p className="mt-1 text-xs text-gray-600">{copy.sub}</p>

@@ -26,7 +26,7 @@ function NavBtn({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center text-xs transition-all ${
+      className={`relative flex flex-col items-center text-xs transition-all active:scale-[0.98] ${
         active ? "text-emerald-600 font-semibold" : "text-gray-500"
       }`}
     >
@@ -361,8 +361,18 @@ export function VendorDashboard() {
           />
           <NavBtn
             active={activeTab === "pickup"}
-            onClick={() => setActiveTab("pickup")}
-            icon={<MapPin className="h-5 w-5" />}
+            onClick={() => {
+              setHasPendingPickupOffer(false);
+              setActiveTab("pickup");
+            }}
+            icon={
+              <div className="relative">
+                <MapPin className="h-5 w-5" />
+                {hasPendingPickupOffer && activeTab !== "pickup" ? (
+                  <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-600 ring-2 ring-white scrapco-pulse-glow" />
+                ) : null}
+              </div>
+            }
             label="Pickup"
           />
 

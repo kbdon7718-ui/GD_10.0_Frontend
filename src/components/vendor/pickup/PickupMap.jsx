@@ -11,6 +11,7 @@ import ActivePickupCard from './ActivePickupCard';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { ensurePushSubscription } from '../../../utils/pushNotifications';
+import { CheckCircle2 } from 'lucide-react';
 
 // Google Maps implementation for vendor pickup map.
 // Requires REACT_APP_GOOGLE_MAPS_API_KEY in frontend env.
@@ -83,6 +84,9 @@ export default function PickupMap({ vendorId, initialCenter }) {
   const isMobile = useMediaQuery('(max-width: 900px)');
   const { online } = useNetworkStatus();
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [offerVisualState, setOfferVisualState] = useState(null); // accepted | rejected | expired
+  const offerVisualTimerRef = useRef(null);
+  const [uiBanner, setUiBanner] = useState(null); // { type: 'assigned'|'completed', at: number }
 
   const selectedAssignedPickup = (() => {
     if (!assignedPickups?.length) return null;
@@ -192,6 +196,31 @@ export default function PickupMap({ vendorId, initialCenter }) {
   // SSE: listen for pickup offers pushed to vendor
   const [currentOffer, setCurrentOffer] = useState(null);
   const { secondsLeft: offerSecondsLeft, progress: offerProgress } = useOfferCountdown(currentOffer);
+
+  useEffect(() => {
+    // Reset offer UI state for each new offer.
+    setOfferVisualState(null);
+    if (offerVisualTimerRef.current) {
+      try { clearTimeout(offerVisualTimerRef.current); } catch (_e) {}
+      offerVisualTimerRef.current = null;
+    }
+  }, [currentOffer?.request_id, currentOffer?.requestId, currentOffer?.id]);
+
+  // UI-only: when countdown hits 0, show a gentle expiry then close.
+  useEffect(() => {
+    if (!currentOffer) return;
+    if (offerActionPending) return;
+    if (offerVisualState) return;
+    if (typeof offerSecondsLeft !== 'number') return;
+    if (offerSecondsLeft > 0) return;
+
+    setOfferVisualState('expired');
+    offerVisualTimerRef.current = setTimeout(() => {
+      closeOffer();
+      setOfferVisualState(null);
+    }, 650);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offerSecondsLeft, currentOffer, offerActionPending, offerVisualState]);
 
   // Restore offer/assigned state after reload (per vendor).
   useEffect(() => {
@@ -449,6 +478,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
       });
 
       if (decision === 'accept') {
+        setOfferVisualState('accepted');
         const lat = Number(currentOffer?.latitude ?? currentOffer?.lat);
         const lng = Number(currentOffer?.longitude ?? currentOffer?.lng);
         const nextPickup = {
@@ -469,10 +499,18 @@ export default function PickupMap({ vendorId, initialCenter }) {
         setPickupStatuses((prev) => ({ ...(prev || {}), [requestId]: 'assigned' }));
         setSelectedPickupId(requestId);
         toast.success('Pickup accepted');
-        closeOffer();
+        setUiBanner({ type: 'assigned', at: Date.now() });
+        offerVisualTimerRef.current = setTimeout(() => {
+          closeOffer();
+          setOfferVisualState(null);
+        }, 700);
       } else {
+        setOfferVisualState('rejected');
         toast('Pickup rejected');
-        closeOffer();
+        offerVisualTimerRef.current = setTimeout(() => {
+          closeOffer();
+          setOfferVisualState(null);
+        }, 450);
       }
     } catch (e) {
       console.error(`Failed to ${decision} offer`, e);
@@ -734,9 +772,26 @@ export default function PickupMap({ vendorId, initialCenter }) {
 
   return (
     <div className="p-3 space-y-3">
+      {uiBanner ? (
+        <div className="fixed top-16 left-1/2 z-50 -translate-x-1/2 w-[92%] max-w-md">
+          <div className="scrapco-pop flex items-center gap-3 rounded-2xl border bg-white p-3 shadow-lg">
+            <CheckCircle2 className={`h-5 w-5 ${uiBanner.type === 'completed' ? 'text-emerald-600' : 'text-emerald-600'}`} />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-gray-900">
+                {uiBanner.type === 'completed' ? 'Pickup completed' : 'Pickup assigned'}
+              </div>
+              <div className="text-xs text-gray-600 truncate">
+                {uiBanner.type === 'completed' ? 'Great work. Saved to history.' : 'You can start navigation now.'}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-end">
         <Button
           variant={pushEnabled ? 'secondary' : 'default'}
+          className="rounded-xl active:scale-[0.98] transition-transform"
           onClick={async () => {
             try {
               const res = await ensurePushSubscription({ apiBase: API_BASE || '', vendorId });
@@ -759,10 +814,12 @@ export default function PickupMap({ vendorId, initialCenter }) {
         open={!!currentOffer}
         offer={currentOffer}
         areaLabel={locationLabel}
+        vendorLoc={vendorLoc}
         online={online}
         pending={offerActionPending}
         secondsLeft={offerSecondsLeft}
         progress={offerProgress}
+        visualState={offerVisualState}
         onAccept={() => sendOfferDecision('accept')}
         onReject={() => sendOfferDecision('reject')}
         onClose={closeOffer}
@@ -779,7 +836,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
         <div className="text-xs text-gray-600">
           {pickupHistory?.length ? `History: ${pickupHistory.length}` : 'No history yet'}
         </div>
-        <Button variant="secondary" onClick={() => setShowHistory((v) => !v)}>
+        <Button variant="secondary" className="rounded-xl active:scale-[0.98] transition-transform" onClick={() => setShowHistory((v) => !v)}>
           {showHistory ? 'Hide history' : 'View history'}
         </Button>
       </div>
@@ -882,6 +939,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
                       pickup={pickup}
                       areaLabel={isSelected ? locationLabel : ''}
                       assignedStatus={status}
+                      sseStatus={sseStatus}
                       online={online}
                       pending={offerActionPending}
                       onShowOnMap={() => {
@@ -962,6 +1020,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
                             }
                           }
                           toast.success('Pickup marked completed');
+                          setUiBanner({ type: 'completed', at: Date.now() });
                           setPickupStatuses((prev) => ({ ...(prev || {}), [id]: 'completed' }));
 
                           const raw = pickup?.raw || {};
@@ -1025,6 +1084,7 @@ export default function PickupMap({ vendorId, initialCenter }) {
                 pickup={activePickup}
                 areaLabel={locationLabel}
                 assignedStatus={'assigned'}
+                sseStatus={sseStatus}
                 online={online}
                 pending={offerActionPending}
                 onShowOnMap={() => {

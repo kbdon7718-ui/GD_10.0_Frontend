@@ -15,7 +15,12 @@ function parseExpiryMs(offer) {
     if (Number.isFinite(s) && s > 0) return Date.now() + s * 1000;
   }
 
-  return null;
+  // UI fallback: if backend doesn't provide expiry, treat offers as a 2-minute decision window
+  // based on received_at/receivedAt (does NOT affect backend logic).
+  const receivedAt = offer.received_at || offer.receivedAt;
+  const receivedMs = receivedAt ? Date.parse(String(receivedAt)) : NaN;
+  const base = Number.isNaN(receivedMs) ? Date.now() : receivedMs;
+  return base + 120 * 1000;
 }
 
 export function useOfferCountdown(offer) {

@@ -8,6 +8,9 @@ import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { Welcome } from "./components/Owner/Welcome";
 import { Login } from "./components/Owner/Login";
 
+import { Navigate, Route, Routes } from "react-router-dom";
+import AiBotPage from "./components/ai/AiBotPage";
+
 import { AuthProvider, useAuth } from "./utils/authContext";
 import { DataProvider } from "./utils/dataContext";
 import { PageRefreshProvider } from "./utils/pageRefreshContext";
@@ -57,15 +60,30 @@ function AppContent() {
   }
 
   if (role === "manager") {
-    return <ManagerDashboard />;
+    return (
+      <Routes>
+        <Route path="/" element={<ManagerDashboard />} />
+        <Route path="/ai-bot" element={<AiBotPage role="manager" />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
   }
 
   if (role === "owner") {
     return (
-      <OwnersDashboard
-        activeSection={activeSection}
-        setActiveSection={setActiveSection}
-      />
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <OwnersDashboard
+              activeSection={activeSection}
+              setActiveSection={setActiveSection}
+            />
+          }
+        />
+        <Route path="/ai-bot" element={<AiBotPage role="owner" />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     );
   }
 

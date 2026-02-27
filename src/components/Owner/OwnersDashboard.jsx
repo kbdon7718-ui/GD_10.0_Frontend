@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
 import {
@@ -16,6 +17,7 @@ import {
   Settings,
   LogOut,
   RefreshCcw,
+  Sparkles,
 } from "lucide-react";
 
 import { useAuth } from "../../utils/authContext";
@@ -52,6 +54,8 @@ export function OwnersDashboard() {
   const { user, logout, setRole } = useAuth();
   const { refresh, hasHandler } = usePageRefresh();
 
+  const navigate = useNavigate();
+
   const [activeTab, setActiveTab] = useState("dashboard");
 
   /* merged sub-tabs */
@@ -80,6 +84,17 @@ export function OwnersDashboard() {
               onClick={() => setRole("manager")}
             >
               Switch to Manager
+            </Button>
+
+            <Button
+              size="icon"
+              variant="ghost"
+              className="text-black hover:bg-white/20"
+              onClick={() => navigate("/ai-bot")}
+              aria-label="AI Scan"
+              title="AI Scan"
+            >
+              <Sparkles />
             </Button>
 
             <Button

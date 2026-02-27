@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 
@@ -10,7 +11,8 @@ import {
   LogOut,
   Users,
   Handshake,
-  RefreshCcw
+  RefreshCcw,
+  Sparkles
 } from "lucide-react";
 
 import { useAuth } from "../../utils/authContext";
@@ -24,6 +26,8 @@ import { KabadiwalaManager } from "./KabadiwalaManager";
 export function ManagerDashboard() {
   const { user, logout, setRole } = useAuth();
   const { refresh, hasHandler } = usePageRefresh();
+
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("expenses");
   const [maalSubTab, setMaalSubTab] = useState("maal-in");
 
@@ -66,6 +70,16 @@ export function ManagerDashboard() {
                 onClick={() => setRole("owner")}
               >
                 Switch to Owner
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="AI Scan"
+                title="AI Scan"
+                onClick={() => navigate("/ai-bot")}
+              >
+                <Sparkles className="h-5 w-5 text-gray-700" />
               </Button>
 
               <Button
